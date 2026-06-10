@@ -1,0 +1,27 @@
+{
+    "name": "sylament/tables",
+    "type": "symfony-bundle",
+    "keywords": [
+        "symfony-ux"
+    ],
+    "authors": [
+        {
+            "name": "Martin Petricko",
+            "email": "matopetricko@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.5",
+        "sylament/support": "self.version"
+    },
+    "autoload": {
+        "psr-4": {
+            "Sylament\\Tables\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Sylament\\Tables\\Tests\\": "tests/"
+        }
+    }
+}

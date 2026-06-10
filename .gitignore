@@ -1,0 +1,17 @@
+# Editors
+/.idea
+/.fleet
+/.vscode
+
+# Framework
+/var
+
+# Composer
+/composer.lock
+/vendor
+
+# Frontend
+/assets/node_modules
+
+# Other
+/phpunit.xml
