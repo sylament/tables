@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../src/controllers/example_controller.ts"],
-  "sourcesContent": ["import { Controller } from \"@hotwired/stimulus\";\n\nexport default class extends Controller {\n  connect() {\n    console.log(this.element);\n  }\n}\n"],
-  "mappings": "AAAA,SAAS,kBAAkB;AAE3B,MAAO,mCAAsB,WAAW;AAAA,EACtC,UAAU;AACR,YAAQ,IAAI,KAAK,OAAO;AAAA,EAC1B;AACF;",
-  "names": []
-}
