@@ -1,5 +1,7 @@
 {
     "name": "sylament/tables",
+    "description": "Sylament tables — datatable builder for the Sylament UI toolkit",
+    "license": "MIT",
     "type": "symfony-bundle",
     "keywords": [
         "symfony-ux"
