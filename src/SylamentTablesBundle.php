@@ -8,5 +8,4 @@ use Sylament\Support\SylamentBundle;
 
 class SylamentTablesBundle extends SylamentBundle
 {
-    //
 }

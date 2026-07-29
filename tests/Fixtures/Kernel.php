@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Sylament\Tables\Tests\Fixtures;
 
-use Sylament\Tables\SylamentTablesBundle;
 use Sylament\Support\SylamentSupportBundle;
+use Sylament\Tables\SylamentTablesBundle;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
