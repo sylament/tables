@@ -1,0 +1,49 @@
+{% set records = component.getRecords %}
+{% set columns = component.getColumns %}
+
+{% set emptyStateIcon = component.getEmptyStateIcon %}
+{% set emptyStateDescription = component.getEmptyStateDescription %}
+
+<div class="sy sy-ta">
+    <div class="sy-ta-ctn">
+        {% if records is empty %}
+            <div class="sy-ta-empty-state" role="status">
+                <div class="sy-ta-empty-state-content">
+                    <div class="sy-ta-empty-state-icon-bg">
+                        <twig:SylamentSupport:Icon
+                            :icon="emptyStateIcon ?? 'heroicons:x-mark'"
+                            :alias="emptyStateIcon ? null : constant('Sylament\\Tables\\Twig\\TablesIconAlias::EMPTY_STATE')"
+                            size="lg"
+                        />
+                    </div>
+                    <h3 class="sy-ta-empty-state-heading">{{ component.getEmptyStateHeading }}</h3>
+                    {% if emptyStateDescription %}
+                        <p class="sy-ta-empty-state-description">{{ emptyStateDescription }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        {% else %}
+            <table class="sy-ta-table">
+                <thead>
+                    <tr>
+                        {% for column in columns %}
+                            <th scope="col" class="sy-ta-header-cell">{{ column.getLabel }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                        <tr class="sy-ta-row">
+                            {% for column in columns %}
+                                {% do column.record(record) %}
+                                <td class="sy-ta-cell">
+                                    <div class="sy-ta-col">{{ renderComponent(column) }}</div>
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+</div>

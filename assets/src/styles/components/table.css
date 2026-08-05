@@ -1,0 +1,61 @@
+.sy-ta {
+    & > .sy-ta-ctn {
+        @apply relative overflow-x-auto rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10;
+    }
+
+    & .sy-ta-table {
+        @apply w-full table-auto divide-y divide-gray-200 text-start dark:divide-white/5;
+
+        & > thead {
+            @apply divide-y divide-gray-200 dark:divide-white/5;
+
+            & > tr {
+                @apply bg-gray-50 dark:bg-white/5;
+            }
+        }
+
+        & > tbody {
+            @apply divide-y divide-gray-200 whitespace-nowrap dark:divide-white/5;
+        }
+    }
+
+    & .sy-ta-header-cell {
+        @apply px-3 py-3.5 text-start text-sm font-semibold whitespace-nowrap text-gray-950 sm:first-of-type:ps-6 sm:last-of-type:pe-6 dark:text-white;
+    }
+
+    & .sy-ta-row {
+        @apply [@media(hover:hover)]:transition-colors [@media(hover:hover)]:duration-75;
+    }
+
+    & .sy-ta-cell {
+        @apply p-0 first:ps-1 last:pe-1 sm:first:ps-3 sm:last:pe-3;
+
+        & .sy-ta-col {
+            @apply flex w-full justify-start text-start;
+        }
+    }
+
+    & .sy-ta-empty-state {
+        @apply px-6 py-12;
+
+        & .sy-ta-empty-state-content {
+            @apply mx-auto grid max-w-lg justify-items-center text-center;
+        }
+
+        & .sy-ta-empty-state-icon-bg {
+            @apply mb-4 rounded-full bg-gray-100 p-3 dark:bg-gray-500/20;
+
+            & .sy-icon {
+                @apply text-gray-500 dark:text-gray-400;
+            }
+        }
+
+        & .sy-ta-empty-state-heading {
+            @apply text-base leading-6 font-semibold text-gray-950 dark:text-white;
+        }
+
+        & .sy-ta-empty-state-description {
+            @apply mt-1 text-sm text-gray-500 dark:text-gray-400;
+        }
+    }
+}

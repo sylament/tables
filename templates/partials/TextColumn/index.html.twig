@@ -1,0 +1,3 @@
+{% set state = component.getFormattedState %}
+
+<div class="sy sy-ta-text">{{ state is iterable ? state|join(', ') : state }}</div>

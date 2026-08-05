@@ -1,2 +1,2 @@
-/* Aggregator for this package's component styles, e.g.:
-   @import './components/table.css' layer(components); */
+@import './components/table.css' layer(components);
+@import './components/text-column.css' layer(components);
