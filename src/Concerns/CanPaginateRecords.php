@@ -1,0 +1,71 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Sylament\Tables\Concerns;
+
+use Symfony\UX\LiveComponent\Attribute\LiveAction;
+use Symfony\UX\LiveComponent\Attribute\LiveArg;
+use Symfony\UX\LiveComponent\Attribute\LiveProp;
+
+trait CanPaginateRecords
+{
+    #[LiveProp]
+    public int $tablePage = 1;
+
+    /**
+     * Stored as the raw client string; `getTableRecordsPerPage()` is the only
+     * reader and validates on every call, so a forged value can never reach a
+     * `records()` closure.
+     */
+    #[LiveProp(writable: true, onUpdated: 'updatedTableRecordsPerPage')]
+    public ?string $tableRecordsPerPage = null;
+
+    #[LiveAction]
+    public function gotoTablePage(#[LiveArg] int $page): void
+    {
+        $this->tablePage = max(1, $page);
+        $this->flushCachedTableRecords();
+    }
+
+    public function getTablePage(): int
+    {
+        return $this->tablePage;
+    }
+
+    public function updatedTableRecordsPerPage(mixed $previousValue = null): void
+    {
+        $this->tablePage = 1;
+        $this->flushCachedTableRecords();
+    }
+
+    /**
+     * Null on an unpaginated table — a closure asking for `recordsPerPage`
+     * there has nothing to slice by, matching Filament's unseeded state — and
+     * null again on a paginated table with no page options, whose default is
+     * null too. The prop is validated against those options, so a string other
+     * than `'all'` only arrives from the table's `defaultPaginationPageOption()`.
+     */
+    public function getTableRecordsPerPage(): int|string|null
+    {
+        $table = $this->getTable();
+
+        if (!$table->isPaginated()) {
+            return null;
+        }
+
+        $value = $this->tableRecordsPerPage;
+        $normalized = match (true) {
+            $value === null => null,
+            $value === 'all' => 'all',
+            is_numeric($value) => (int) $value,
+            default => null,
+        };
+
+        if ($normalized !== null && in_array($normalized, $table->getPaginationPageOptions(), true)) {
+            return $normalized;
+        }
+
+        return $table->getDefaultPaginationPageOption();
+    }
+}

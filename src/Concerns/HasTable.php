@@ -8,6 +8,7 @@ use LogicException;
 use Stringable;
 use Sylament\Schemas\Components\Concerns\CanAccessProperties;
 use Sylament\Support\ArrayRecord;
+use Sylament\Support\Pagination\Paginator;
 use Sylament\Tables\Table;
 use Symfony\Component\PropertyAccess\Exception\AccessException;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
@@ -17,6 +18,9 @@ use function Sylament\Support\blank;
 trait HasTable
 {
     use CanAccessProperties;
+    use CanPaginateRecords;
+    use CanSearchRecords;
+    use CanSortRecords;
 
     /**
      * The morph-key prefix every row and cell of this host's table is stamped
@@ -28,9 +32,9 @@ trait HasTable
     protected ?Table $cachedTable = null;
 
     /**
-     * @var array<array-key, object|array<string, mixed>>|null
+     * @var array<array-key, object|array<string, mixed>>|Paginator|null
      */
-    protected ?array $cachedTableRecords = null;
+    protected array|Paginator|null $cachedTableRecords = null;
 
     public function table(Table $table): Table
     {
@@ -53,11 +57,18 @@ trait HasTable
     }
 
     /**
-     * @return array<array-key, object|array<string, mixed>> keyed by record key
+     * @return array<array-key, object|array<string, mixed>>|Paginator keyed by record key
      */
-    public function getTableRecords(): array
+    public function getTableRecords(): array|Paginator
     {
         return $this->cachedTableRecords ??= $this->resolveTableRecords();
+    }
+
+    public function getTablePaginator(): ?Paginator
+    {
+        $records = $this->getTableRecords();
+
+        return $records instanceof Paginator ? $records : null;
     }
 
     /**
@@ -69,7 +80,13 @@ trait HasTable
             return null;
         }
 
-        return ($this->cachedTableRecords ?? $this->resolveTableRecords())[$key] ?? null;
+        $records = $this->cachedTableRecords ?? $this->resolveTableRecords();
+
+        if ($records instanceof Paginator) {
+            $records = $records->getRecords();
+        }
+
+        return $records[$key] ?? null;
     }
 
     public function flushCachedTableRecords(): void
@@ -107,9 +124,9 @@ trait HasTable
     }
 
     /**
-     * @return array<array-key, object|array<string, mixed>> keyed by record key
+     * @return array<array-key, object|array<string, mixed>>|Paginator keyed by record key
      */
-    protected function resolveTableRecords(): array
+    protected function resolveTableRecords(): array|Paginator
     {
         $table = $this->getTable();
         $dataSource = $table->getDataSource();
@@ -118,15 +135,35 @@ trait HasTable
             throw new LogicException(sprintf('Table [%s] must have [records()].', static::class));
         }
 
-        $records = $table->evaluate($dataSource);
+        $records = $table->evaluate($dataSource, [
+            'page' => fn (): int => $this->getTablePage(),
+            'recordsPerPage' => fn (): int|string|null => $this->getTableRecordsPerPage(),
+            'search' => fn (): ?string => $this->getTableSearch(),
+            'sort' => fn (): array => [$this->getTableSortColumn(), $this->getTableSortDirection()],
+            'sortColumn' => fn (): ?string => $this->getTableSortColumn(),
+            'sortDirection' => fn (): ?string => $this->getTableSortDirection(),
+        ]);
 
-        if (!is_iterable($records)) {
-            throw new LogicException(sprintf('The [records()] closure of table [%s] must return an iterable, got %s.', static::class, get_debug_type($records)));
+        if ($records instanceof Paginator) {
+            return $records->withRecords($this->keyTableRecords($records->getRecords()));
         }
 
+        if (!is_iterable($records)) {
+            throw new LogicException(sprintf('The [records()] closure of table [%s] must return an iterable or a [%s], got %s.', static::class, Paginator::class, get_debug_type($records)));
+        }
+
+        return $this->keyTableRecords($records);
+    }
+
+    /**
+     * @param iterable<array-key, object|array<string, mixed>> $records
+     *
+     * @return array<array-key, object|array<string, mixed>> keyed by record key
+     */
+    private function keyTableRecords(iterable $records): array
+    {
         $keyedRecords = [];
 
-        /** @var iterable<array-key, object|array<string, mixed>> $records */
         foreach ($records as $sourceKey => $record) {
             if (is_array($record)) {
                 $record[ArrayRecord::getKeyName()] ??= $sourceKey;

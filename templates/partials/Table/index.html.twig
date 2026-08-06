@@ -2,6 +2,11 @@
 {% set columns = component.getColumns %}
 {% set hostId = component.getLiveComponent.getTableHostId %}
 
+{% set paginator = component.getPaginator %}
+{% set sortColumn = component.getSortColumn %}
+{% set sortDirection = component.getSortDirection %}
+{% set isSearchable = component.isSearchable %}
+
 {% set recordActionsByKey = component.getVisibleRecordActionsByRecordKey %}
 {% set hasRecordActions = recordActionsByKey|filter(actions => actions is not empty)|length > 0 %}
 {% set actionsLeading = hasRecordActions and component.getRecordActionsPosition.name in ['BeforeCells', 'BeforeColumns'] %}
@@ -12,6 +17,27 @@
 
 <div class="sy sy-ta">
     <div class="sy-ta-ctn">
+        {% if isSearchable %}
+            <div class="sy-ta-header-toolbar">
+                <label class="sy-ta-search-field">
+                    <twig:SylamentSupport:Icon
+                        icon="heroicons:magnifying-glass"
+                        :alias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::SEARCH_FIELD')"
+                        size="sm"
+                    />
+                    <input
+                        type="search"
+                        class="sy-ta-search-input"
+                        autocomplete="off"
+                        maxlength="1000"
+                        placeholder="{{ component.getSearchPlaceholder ?? 'Search' }}"
+                        aria-label="Search"
+                        data-model="{{ component.isSearchOnBlur ? 'on(change)|tableSearch' : 'debounce(' ~ component.getSearchDebounceMilliseconds ~ ')|tableSearch' }}"
+                    >
+                </label>
+            </div>
+        {% endif %}
+
         {% if records is empty %}
             <div class="sy-ta-empty-state" role="status">
                 <div class="sy-ta-empty-state-content">
@@ -36,7 +62,37 @@
                             <th scope="col" aria-label="Actions" class="sy-ta-actions-header-cell sy-ta-empty-header-cell"></th>
                         {% endif %}
                         {% for column in columns %}
-                            <th scope="col" class="sy-ta-header-cell">{{ column.getLabel }}</th>
+                            {% set columnName = column.getName %}
+                            {% set isColumnSortable = column.isSortable %}
+                            {% set isColumnSorted = isColumnSortable and sortColumn == columnName %}
+                            <th
+                                scope="col"
+                                {{ attrs({
+                                    class: classes('sy-ta-header-cell', {'sy-ta-header-cell-sorted': isColumnSorted}),
+                                    'aria-sort': isColumnSortable ? (isColumnSorted ? (sortDirection == 'desc' ? 'descending' : 'ascending') : 'none') : null,
+                                }) }}
+                            >
+                                {% if isColumnSortable %}
+                                    <button
+                                        type="button"
+                                        class="sy-ta-header-cell-sort-btn"
+                                        {{ stimulus_action('live', 'action', parameters: {action: 'sortTable', column: columnName}) }}
+                                    >
+                                        {{ column.getLabel }}
+                                        <twig:SylamentSupport:Icon
+                                            :icon="isColumnSorted and sortDirection == 'asc' ? 'heroicons:chevron-up' : 'heroicons:chevron-down'"
+                                            :alias="isColumnSorted
+                                                ? (sortDirection == 'asc'
+                                                    ? constant('Sylament\\Tables\\Twig\\TablesIconAlias::HEADER_CELL_SORT_ASC_BUTTON')
+                                                    : constant('Sylament\\Tables\\Twig\\TablesIconAlias::HEADER_CELL_SORT_DESC_BUTTON'))
+                                                : constant('Sylament\\Tables\\Twig\\TablesIconAlias::HEADER_CELL_SORT_BUTTON')"
+                                            size="sm"
+                                        />
+                                    </button>
+                                {% else %}
+                                    {{ column.getLabel }}
+                                {% endif %}
+                            </th>
                         {% endfor %}
                         {% if actionsTrailing %}
                             <th scope="col" aria-label="Actions" class="sy-ta-actions-header-cell sy-ta-empty-header-cell"></th>
@@ -75,6 +131,15 @@
                     {% endfor %}
                 </tbody>
             </table>
+        {% endif %}
+
+        {% if paginator and paginator.getTotalRecordCount > 0 %}
+            <twig:SylamentSupport:Pagination
+                :paginator="paginator"
+                :pageOptions="component.getPaginationPageOptions"
+                :extremeLinks="component.hasExtremePaginationLinks"
+                :currentPerPage="component.getLiveComponent.getTableRecordsPerPage"
+            />
         {% endif %}
     </div>
 </div>

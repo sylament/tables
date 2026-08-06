@@ -1,0 +1,28 @@
+.sy-ta-header-toolbar {
+    @apply flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 px-4 py-3 sm:px-6 dark:border-white/10;
+
+    & > * {
+        @apply flex min-h-9 items-center gap-x-4;
+    }
+
+    & > :nth-child(2) {
+        @apply ms-auto;
+    }
+
+    & .sy-ta-search-field {
+        @apply ms-auto flex items-center gap-x-2 rounded-lg bg-white ps-3 shadow-sm ring-1 ring-gray-950/10 transition duration-75 focus-within:ring-2 focus-within:ring-primary-600 dark:bg-white/5 dark:ring-white/20 dark:focus-within:ring-primary-500;
+
+        & > .sy-icon {
+            @apply text-gray-400 dark:text-gray-500;
+        }
+
+        & .sy-ta-search-input {
+            @apply block w-full min-w-0 appearance-none border-none bg-transparent py-1.5 ps-0 pe-3 text-start text-sm leading-6 text-gray-950 transition duration-75 outline-none placeholder:text-gray-400 focus:ring-0 focus:outline-none dark:text-white dark:placeholder:text-gray-500;
+
+            /* https://defensivecss.dev/tip/input-zoom-safari */
+            @supports (-webkit-touch-callout: none) {
+                @apply text-base;
+            }
+        }
+    }
+}

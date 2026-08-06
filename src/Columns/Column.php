@@ -9,6 +9,8 @@ use Sylament\Schemas\Components\Concerns\CanAccessProperties;
 use Sylament\Support\Components\ViewComponent;
 use Sylament\Support\Evaluation\ClosureParameter;
 use Sylament\Tables\Columns\Concerns\BelongsToTable;
+use Sylament\Tables\Columns\Concerns\CanBeSearchable;
+use Sylament\Tables\Columns\Concerns\CanBeSortable;
 use Sylament\Tables\Columns\Concerns\HasCellState;
 use Sylament\Tables\Columns\Concerns\HasLabel;
 use Sylament\Tables\Columns\Concerns\HasName;
@@ -20,6 +22,8 @@ class Column extends ViewComponent
 {
     use BelongsToTable;
     use CanAccessProperties;
+    use CanBeSearchable;
+    use CanBeSortable;
     use HasCellState;
     use HasLabel;
     use HasName;

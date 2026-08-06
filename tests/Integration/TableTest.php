@@ -35,11 +35,11 @@ it('renders header labels and cell values for object records', function (): void
 
     expect($html)
         ->toContain('sy-ta-table')
-        ->toContain('<th scope="col" class="sy-ta-header-cell">Title</th>')
-        ->toContain('<th scope="col" class="sy-ta-header-cell">Album</th>')
         ->toContain('Airbag')
         ->toContain('Let Down')
-        ->not->toContain('sy-ta-empty-state');
+        ->not->toContain('sy-ta-empty-state')
+        ->and(new Crawler($html)->filter('th.sy-ta-header-cell')->each(fn (Crawler $header): string => $header->text()))
+        ->toBe(['Title', 'Album']);
 });
 
 it('nests the populated table in the documented DOM contract', function (): void {

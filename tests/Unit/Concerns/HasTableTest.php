@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Sylament\Support\Pagination\Paginator;
+use Sylament\Tables\Columns\TextColumn;
 use Sylament\Tables\Table;
 use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
 use Sylament\Tables\Tests\Fixtures\Records\Artist;
@@ -195,4 +197,243 @@ it('flushes the cached records so the next read re-evaluates', function (): void
     $host->getTableRecords();
 
     expect($evaluations)->toBe(2);
+});
+
+it('cycles sortTable through asc, desc, unsorted on the same column', function (): void {
+    $host = new TableHost(fn (Table $t): Table => $t->columns([TextColumn::make('title')->sortable()]));
+
+    $host->sortTable('title');
+    expect($host->tableSort)->toBe('title:asc')
+        ->and($host->getTableSortColumn())->toBe('title')
+        ->and($host->getTableSortDirection())->toBe('asc');
+
+    $host->sortTable('title');
+    expect($host->tableSort)->toBe('title:desc');
+
+    $host->sortTable('title');
+    expect($host->tableSort)->toBeNull()
+        ->and($host->getTableSortColumn())->toBeNull()
+        ->and($host->getTableSortDirection())->toBeNull();
+});
+
+it('starts a newly sorted column ascending and honours an explicit direction', function (): void {
+    $host = new TableHost(fn (Table $t): Table => $t->columns([
+        TextColumn::make('title')->sortable(),
+        TextColumn::make('status')->sortable(),
+    ]));
+
+    $host->sortTable('title');
+    $host->sortTable('status');
+
+    expect($host->tableSort)->toBe('status:asc');
+
+    $host->sortTable('title', 'desc');
+    expect($host->tableSort)->toBe('title:desc');
+});
+
+it('ignores a sort on an unknown, unsortable, or invalid-direction request', function (): void {
+    $host = new TableHost(fn (Table $t): Table => $t->columns([
+        TextColumn::make('title')->sortable(),
+        TextColumn::make('slug'),
+    ]));
+
+    $host->sortTable('slug');
+    $host->sortTable('missing');
+    $host->sortTable();
+    $host->sortTable('title', 'sideways');
+
+    expect($host->tableSort)->toBeNull();
+});
+
+it('string-casts a numeric sort column argument', function (): void {
+    $host = new TableHost(fn (Table $t): Table => $t->columns([TextColumn::make('2024')->sortable()]));
+
+    $host->sortTable(2024);
+
+    expect($host->tableSort)->toBe('2024:asc');
+});
+
+it('parses a bare column as ascending and garbage direction as null', function (): void {
+    $host = new TableHost();
+    $host->tableSort = 'title';
+
+    expect($host->getTableSortColumn())->toBe('title')
+        ->and($host->getTableSortDirection())->toBe('asc');
+
+    $host->tableSort = 'title:bogus';
+
+    expect($host->getTableSortDirection())->toBeNull();
+});
+
+it('resets to the first page when sort, per-page, or search change', function (): void {
+    $host = new TableHost(fn (Table $t): Table => $t->columns([TextColumn::make('title')->sortable()]));
+    $host->gotoTablePage(4);
+
+    expect($host->getTablePage())->toBe(4);
+
+    $host->sortTable('title');
+    expect($host->getTablePage())->toBe(1);
+
+    $host->gotoTablePage(4);
+    $host->updatedTableRecordsPerPage('10');
+
+    expect($host->getTablePage())->toBe(1);
+
+    $host->gotoTablePage(4);
+    $host->updatedTableSearch('');
+
+    expect($host->getTablePage())->toBe(1);
+});
+
+it('clamps gotoTablePage to one', function (): void {
+    $host = new TableHost();
+    $host->gotoTablePage(-3);
+
+    expect($host->getTablePage())->toBe(1);
+});
+
+it('seeds records per page from the table default without writing the prop', function (): void {
+    $host = new TableHost();
+
+    expect($host->getTableRecordsPerPage())->toBe(10)
+        ->and($host->tableRecordsPerPage)->toBeNull();
+});
+
+it('reports null records per page on an unpaginated table', function (): void {
+    $host = new TableHost(fn (Table $t): Table => $t->paginated(false));
+
+    expect($host->getTableRecordsPerPage())->toBeNull();
+});
+
+it('normalizes the per-page prop and falls back to the default outside the options', function (): void {
+    $host = new TableHost(fn (Table $t): Table => $t->paginationPageOptions([5, 10, 'all']));
+
+    $host->tableRecordsPerPage = '5';
+
+    expect($host->getTableRecordsPerPage())->toBe(5);
+
+    $host->tableRecordsPerPage = 'all';
+    expect($host->getTableRecordsPerPage())->toBe('all');
+
+    $host->tableRecordsPerPage = '999999';
+    expect($host->getTableRecordsPerPage())->toBe(10);
+
+    $host->tableRecordsPerPage = 'drop table';
+    expect($host->getTableRecordsPerPage())->toBe(10);
+});
+
+it('trims the search and reads blank as null', function (): void {
+    $host = new TableHost();
+
+    expect($host->getTableSearch())->toBeNull();
+
+    $host->tableSearch = "  ok computer\u{00A0}";
+    expect($host->getTableSearch())->toBe('ok computer');
+
+    $host->tableSearch = "\u{00A0}\u{2003}";
+    expect($host->getTableSearch())->toBeNull();
+});
+
+it('injects the table state into the records closure lazily', function (): void {
+    $seen = null;
+    $host = new TableHost(function (Table $t) use (&$seen): Table {
+        return $t
+            ->columns([TextColumn::make('title')->sortable()])
+            ->records(function (int $page, int|string|null $recordsPerPage, ?string $search, array $sort, ?string $sortColumn, ?string $sortDirection) use (&$seen): array {
+                $seen = ['page' => $page, 'recordsPerPage' => $recordsPerPage, 'search' => $search, 'sort' => $sort, 'sortColumn' => $sortColumn, 'sortDirection' => $sortDirection];
+
+                return [];
+            });
+    });
+
+    $host->sortTable('title', 'desc');
+    $host->gotoTablePage(3);
+    $host->tableSearch = 'radiohead';
+    $host->getTableRecords();
+
+    expect($seen)->toBe([
+        'page' => 3,
+        'recordsPerPage' => 10,
+        'search' => 'radiohead',
+        'sort' => ['title', 'desc'],
+        'sortColumn' => 'title',
+        'sortDirection' => 'desc',
+    ]);
+});
+
+it('re-resolves after a sort, page, or search mutation flushes the cache', function (): void {
+    $fetches = 0;
+    $host = new TableHost(function (Table $t) use (&$fetches): Table {
+        return $t
+            ->columns([TextColumn::make('title')->sortable()])
+            ->records(function () use (&$fetches): array {
+                $fetches++;
+
+                return [];
+            });
+    });
+
+    $host->getTableRecords();
+    $host->sortTable('title');
+    $host->getTableRecords();
+
+    expect($fetches)->toBe(2);
+
+    $host->gotoTablePage(3);
+    $host->getTableRecords();
+
+    expect($fetches)->toBe(3);
+
+    $host->tableSearch = 'radiohead';
+    $host->updatedTableSearch();
+    $host->getTableRecords();
+
+    expect($fetches)->toBe(4);
+});
+
+it('re-keys a returned Paginator by record key and caches the clone', function (): void {
+    $host = new TableHost(fn (Table $t): Table => $t->records(fn (): Paginator => new Paginator(
+        records: [['title' => 'Airbag'], ['title' => 'Let Down']],
+        totalRecordCount: 23,
+        page: 2,
+        recordsPerPage: 2,
+    )));
+
+    $records = $host->getTableRecords();
+
+    expect($records)->toBeInstanceOf(Paginator::class)
+        ->and($records->getRecords())->toBe([
+            ['title' => 'Airbag', '__key' => '0'],
+            ['title' => 'Let Down', '__key' => '1'],
+        ])
+        ->and($records->getTotalRecordCount())->toBe(23)
+        ->and($host->getTableRecords())->toBe($records)
+        ->and($host->getTablePaginator())->toBe($records)
+        ->and($host->getTableRecord('1'))->toBe(['title' => 'Let Down', '__key' => '1']);
+});
+
+it('reports a null paginator for a plain iterable return', function (): void {
+    $host = new TableHost(fn (Table $t): Table => $t->records(fn (): array => [['title' => 'Airbag']]));
+
+    expect($host->getTablePaginator())->toBeNull()
+        ->and($host->getTable()->getPaginator())->toBeNull();
+});
+
+it('exposes the paginator through the table delegates', function (): void {
+    $host = new TableHost(fn (Table $t): Table => $t
+        ->columns([TextColumn::make('title')->sortable()])
+        ->records(fn (): Paginator => new Paginator([], 0, 1, 5)));
+
+    $host->sortTable('title');
+
+    expect($host->getTable()->getPaginator())->toBeInstanceOf(Paginator::class)
+        ->and($host->getTable()->getSortColumn())->toBe('title')
+        ->and($host->getTable()->getSortDirection())->toBe('asc');
+});
+
+it('names the Paginator arm when the closure returns garbage', function (): void {
+    $host = new TableHost(fn (Table $t): Table => $t->records(fn (): int => 42));
+
+    expect(fn (): array|Paginator => $host->getTableRecords())
+        ->toThrow(LogicException::class, 'Paginator');
 });

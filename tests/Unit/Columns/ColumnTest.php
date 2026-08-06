@@ -141,3 +141,48 @@ it('clears the cached state', function (): void {
 
     expect($column->getState())->toBe('Changed');
 });
+
+it('is not sortable by default', function (): void {
+    expect(TextColumn::make('title')->isSortable())->toBeFalse();
+});
+
+it('is sortable through the flag, a closure, and the column-list arm', function (): void {
+    expect(TextColumn::make('title')->sortable()->isSortable())->toBeTrue()
+        ->and(TextColumn::make('title')->sortable(false)->isSortable())->toBeFalse()
+        ->and(TextColumn::make('title')->sortable(fn (): bool => true)->isSortable())->toBeTrue()
+        ->and(TextColumn::make('title')->sortable(['title', 'subtitle'])->isSortable())->toBeTrue();
+});
+
+it('is not searchable by default', function (): void {
+    $column = TextColumn::make('title');
+
+    expect($column->isSearchable())->toBeFalse()
+        ->and($column->isGloballySearchable())->toBeFalse()
+        ->and($column->isIndividuallySearchable())->toBeFalse();
+});
+
+it('is globally searchable by default once marked searchable', function (): void {
+    $column = TextColumn::make('title')->searchable();
+
+    expect($column->isSearchable())->toBeTrue()
+        ->and($column->isGloballySearchable())->toBeTrue()
+        ->and($column->isIndividuallySearchable())->toBeFalse();
+});
+
+it('evaluates a searchable closure as the condition, not as a search column', function (): void {
+    expect(TextColumn::make('title')->searchable(fn (): bool => false)->isSearchable())->toBeFalse()
+        ->and(TextColumn::make('title')->searchable(fn (): bool => true)->isGloballySearchable())->toBeTrue();
+});
+
+it('takes search-column strings while staying searchable', function (): void {
+    expect(TextColumn::make('title')->searchable('title')->isSearchable())->toBeTrue()
+        ->and(TextColumn::make('title')->searchable(['title', 'subtitle'])->isSearchable())->toBeTrue();
+});
+
+it('scopes searchability with the isGlobal and isIndividual flags', function (): void {
+    $individual = TextColumn::make('title')->searchable(isIndividual: true, isGlobal: false);
+
+    expect($individual->isSearchable())->toBeTrue()
+        ->and($individual->isGloballySearchable())->toBeFalse()
+        ->and($individual->isIndividuallySearchable())->toBeTrue();
+});

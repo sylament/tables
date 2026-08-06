@@ -1,2 +1,3 @@
+@import './components/header-toolbar.css' layer(components);
 @import './components/table.css' layer(components);
 @import './components/text-column.css' layer(components);

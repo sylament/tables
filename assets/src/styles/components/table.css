@@ -1,6 +1,10 @@
 .sy-ta {
     & > .sy-ta-ctn {
         @apply relative overflow-x-auto rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10;
+
+        & .sy-pagination {
+            @apply border-t border-gray-200 px-3 py-3 sm:px-6 dark:border-white/10;
+        }
     }
 
     & .sy-ta-table {
@@ -21,6 +25,38 @@
 
     & .sy-ta-header-cell {
         @apply px-3 py-3.5 text-start text-sm font-semibold whitespace-nowrap text-gray-950 sm:first-of-type:ps-6 sm:last-of-type:pe-6 dark:text-white;
+
+        &.sy-ta-header-cell-sorted {
+            & .sy-icon {
+                @apply text-gray-950 dark:text-white;
+            }
+        }
+
+        &:not(.sy-ta-header-cell-sorted) {
+            & .sy-icon {
+                @apply text-gray-400 dark:text-gray-500;
+            }
+
+            & .sy-ta-header-cell-sort-btn:hover {
+                & .sy-icon {
+                    @apply text-gray-500 dark:text-gray-400;
+                }
+            }
+
+            & .sy-ta-header-cell-sort-btn:focus-visible {
+                & .sy-icon {
+                    @apply text-gray-500 dark:text-gray-400;
+                }
+            }
+        }
+
+        & .sy-ta-header-cell-sort-btn {
+            @apply flex w-full cursor-pointer appearance-none items-center justify-start gap-x-1 rounded-md border-0 bg-transparent p-0 text-start outline-none focus-visible:ring-2 focus-visible:ring-primary-600 dark:focus-visible:ring-primary-500;
+        }
+
+        & .sy-icon {
+            @apply shrink-0 transition duration-75;
+        }
     }
 
     & .sy-ta-empty-header-cell {

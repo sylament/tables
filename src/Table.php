@@ -9,6 +9,9 @@ use Sylament\Support\Components\ViewComponent;
 use Sylament\Support\Evaluation\ClosureParameter;
 use Sylament\Tables\Contracts\InteractsWithTable;
 use Sylament\Tables\Table\Concerns\BelongsToLiveComponent;
+use Sylament\Tables\Table\Concerns\CanPaginateRecords;
+use Sylament\Tables\Table\Concerns\CanSearchRecords;
+use Sylament\Tables\Table\Concerns\CanSortRecords;
 use Sylament\Tables\Table\Concerns\HasActions;
 use Sylament\Tables\Table\Concerns\HasColumns;
 use Sylament\Tables\Table\Concerns\HasEmptyState;
@@ -18,6 +21,9 @@ use Sylament\Tables\Table\Concerns\HasRecords;
 class Table extends ViewComponent
 {
     use BelongsToLiveComponent;
+    use CanPaginateRecords;
+    use CanSearchRecords;
+    use CanSortRecords;
     use HasActions;
     use HasColumns;
     use HasEmptyState;
