@@ -9,15 +9,19 @@ use Sylament\Support\Components\ViewComponent;
 use Sylament\Support\Evaluation\ClosureParameter;
 use Sylament\Tables\Contracts\InteractsWithTable;
 use Sylament\Tables\Table\Concerns\BelongsToLiveComponent;
+use Sylament\Tables\Table\Concerns\HasActions;
 use Sylament\Tables\Table\Concerns\HasColumns;
 use Sylament\Tables\Table\Concerns\HasEmptyState;
+use Sylament\Tables\Table\Concerns\HasRecordActions;
 use Sylament\Tables\Table\Concerns\HasRecords;
 
 class Table extends ViewComponent
 {
     use BelongsToLiveComponent;
+    use HasActions;
     use HasColumns;
     use HasEmptyState;
+    use HasRecordActions;
     use HasRecords;
 
     protected string $evaluationIdentifier = 'table';

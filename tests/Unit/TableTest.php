@@ -24,6 +24,12 @@ it('stores and returns the records data source', function (): void {
     expect($table->getDataSource())->toBe($dataSource);
 });
 
+it('delegates the record key to the host', function (): void {
+    $table = Table::make(new TableHost());
+
+    expect($table->getRecordKey(['__key' => '7']))->toBe('7');
+});
+
 it('defaults the empty state heading and leaves description and icon unset', function (): void {
     $table = Table::make(new TableHost());
 

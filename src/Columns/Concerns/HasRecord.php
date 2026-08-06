@@ -11,6 +11,8 @@ trait HasRecord
      */
     protected object|array|null $record = null;
 
+    protected ?string $recordKey = null;
+
     /**
      * @param object|array<string, mixed> $record
      */
@@ -19,6 +21,22 @@ trait HasRecord
         $this->record = $record;
 
         return $this;
+    }
+
+    /**
+     * The key the table addresses this cell's record by; `int` is admitted and
+     * stored as its string form.
+     */
+    public function recordKey(string|int|null $key): static
+    {
+        $this->recordKey = $key === null ? null : (string) $key;
+
+        return $this;
+    }
+
+    public function getRecordKey(): ?string
+    {
+        return $this->recordKey;
     }
 
     /**

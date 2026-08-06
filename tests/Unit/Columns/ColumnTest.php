@@ -85,3 +85,59 @@ it('injects itself into a differently named parameter type-hinted as the column'
 
     expect($column->state(fn (Column $boundColumn): Column => $boundColumn)->getState())->toBe($column);
 });
+
+it('casts an integer record key to a string and takes null back', function (): void {
+    $column = Column::make('title');
+
+    expect($column->getRecordKey())->toBeNull()
+        ->and($column->recordKey(7)->getRecordKey())->toBe('7')
+        ->and($column->recordKey('7')->getRecordKey())->toBe('7')
+        ->and($column->recordKey(null)->getRecordKey())->toBeNull();
+});
+
+it('caches state per record key and re-reads for a new key', function (): void {
+    $column = TextColumn::make('title');
+    $column->record(['title' => 'Airbag', '__key' => '1'])->recordKey('1');
+
+    expect($column->getState())->toBe('Airbag');
+
+    $column->record(['title' => 'Changed', '__key' => '1']);
+
+    expect($column->getState())->toBe('Airbag');
+
+    $column->record(['title' => 'Let Down', '__key' => '2'])->recordKey('2');
+
+    expect($column->getState())->toBe('Let Down');
+});
+
+it('caches a null state rather than reading the record again', function (): void {
+    $column = TextColumn::make('title');
+    $column->record(['title' => null, '__key' => '1'])->recordKey('1');
+
+    expect($column->getState())->toBeNull();
+
+    $column->record(['title' => 'Airbag', '__key' => '1']);
+
+    expect($column->getState())->toBeNull();
+});
+
+it('reads fresh every time without a record key', function (): void {
+    $column = TextColumn::make('title');
+    $column->record(['title' => 'Airbag']);
+
+    expect($column->getState())->toBe('Airbag');
+
+    $column->record(['title' => 'Changed']);
+
+    expect($column->getState())->toBe('Changed');
+});
+
+it('clears the cached state', function (): void {
+    $column = TextColumn::make('title');
+    $column->record(['title' => 'Airbag'])->recordKey('1');
+    $column->getState();
+    $column->record(['title' => 'Changed']);
+    $column->clearCachedState();
+
+    expect($column->getState())->toBe('Changed');
+});

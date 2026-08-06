@@ -10,6 +10,7 @@ final readonly class Song
         public string $title,
         public string $album,
         public ?Artist $artist = null,
+        public ?int $id = null,
     ) {
     }
 }

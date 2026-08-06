@@ -22,7 +22,7 @@ use function Sylament\Tables\Tests\renderToHtml;
 
 it('renders dotted-path and formatted state into cells', function (): void {
     $host = new TableHost(fn (Table $table): Table => $table
-        ->records(fn (): array => [new Song('Airbag', 'OK Computer', new Artist('Radiohead'))])
+        ->records(fn (): array => [new Song('Airbag', 'OK Computer', new Artist('Radiohead'), id: 1)])
         ->columns([
             TextColumn::make('artist.name'),
             TextColumn::make('title')->formatStateUsing(fn (string $state): string => mb_strtoupper($state)),

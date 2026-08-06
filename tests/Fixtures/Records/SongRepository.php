@@ -19,8 +19,8 @@ final readonly class SongRepository
     public function __construct()
     {
         $this->songs = [
-            new Song('Airbag', 'OK Computer'),
-            new Song('Let Down', 'OK Computer'),
+            new Song('Airbag', 'OK Computer', id: 1),
+            new Song('Let Down', 'OK Computer', id: 2),
         ];
     }
 

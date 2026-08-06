@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Sylament\Tables\Tests\Integration;
 
+use Sylament\Actions\Action;
 use Sylament\Tables\Columns\TextColumn;
+use Sylament\Tables\Enums\RecordActionsPosition;
 use Sylament\Tables\Table;
 use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
 use Sylament\Tables\Tests\Fixtures\Records\Song;
@@ -26,7 +28,7 @@ use function Sylament\Tables\Tests\renderToHtml;
 
 it('renders header labels and cell values for object records', function (): void {
     $host = new TableHost(fn (Table $table): Table => $table
-        ->records(fn (): array => [new Song('Airbag', 'OK Computer'), new Song('Let Down', 'OK Computer')])
+        ->records(fn (): array => [new Song('Airbag', 'OK Computer', id: 1), new Song('Let Down', 'OK Computer', id: 2)])
         ->columns([TextColumn::make('title'), TextColumn::make('album')]));
 
     $html = renderToHtml($host->getTable());
@@ -42,7 +44,7 @@ it('renders header labels and cell values for object records', function (): void
 
 it('nests the populated table in the documented DOM contract', function (): void {
     $host = new TableHost(fn (Table $table): Table => $table
-        ->records(fn (): array => [new Song('Airbag', 'OK Computer'), new Song('Let Down', 'OK Computer')])
+        ->records(fn (): array => [new Song('Airbag', 'OK Computer', id: 1), new Song('Let Down', 'OK Computer', id: 2)])
         ->columns([TextColumn::make('title'), TextColumn::make('album')]));
 
     $crawler = new Crawler(renderToHtml($host->getTable()));
@@ -132,4 +134,67 @@ it('escapes record values', function (): void {
     expect(renderToHtml($host->getTable()))
         ->toContain('&lt;script&gt;')
         ->not->toContain('<script>alert(1)</script>');
+});
+
+it('stamps morph-stable ids on rows and cells', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->records(fn (): array => [new Song('Airbag', 'OK Computer', id: 7)])
+        ->columns([TextColumn::make('title')]));
+
+    $crawler = new Crawler(renderToHtml($host->getTable()));
+    $hostId = $host->getTableHostId();
+
+    expect($crawler->filter(sprintf('tr[id="%s.table.records.7"]', $hostId))->count())->toBe(1)
+        ->and($crawler->filter(sprintf('td[id="%s.table.record.7.column.title"]', $hostId))->count())->toBe(1);
+});
+
+it('renders the actions column trailing by default with per-row link triggers', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->records(fn (): array => [new Song('Airbag', 'OK Computer', id: 7)])
+        ->columns([TextColumn::make('title')])
+        ->recordActions([Action::make('edit')->url(fn (Song $record): string => '/songs/' . $record->id)]));
+
+    $crawler = new Crawler(renderToHtml($host->getTable()));
+
+    expect($crawler->filter('thead th.sy-ta-actions-header-cell.sy-ta-empty-header-cell[aria-label="Actions"]')->count())->toBe(1)
+        ->and($crawler->filter('thead th:last-child.sy-ta-actions-header-cell')->count())->toBe(1)
+        ->and($crawler->filter('tr.sy-ta-row > td.sy-ta-cell > div.sy-ta-actions')->count())->toBe(1)
+        ->and($crawler->filter('tr.sy-ta-row > td:last-child > div.sy-ta-actions')->count())->toBe(1)
+        ->and($crawler->filter('div.sy-ta-actions a[href="/songs/7"]')->count())->toBe(1)
+        ->and($crawler->filter('thead th')->count())->toBe(2);
+});
+
+it('renders the actions column leading for a Before position', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->records(fn (): array => [new Song('Airbag', 'OK Computer', id: 7)])
+        ->columns([TextColumn::make('title')])
+        ->recordActions([Action::make('edit')], position: RecordActionsPosition::BeforeColumns));
+
+    $crawler = new Crawler(renderToHtml($host->getTable()));
+
+    expect($crawler->filter('tr.sy-ta-row > td:first-child > div.sy-ta-actions')->count())->toBe(1)
+        ->and($crawler->filter('thead th:first-child.sy-ta-actions-header-cell')->count())->toBe(1);
+});
+
+it('omits the actions column entirely when every action is hidden for every record', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->records(fn (): array => [new Song('Airbag', 'OK Computer', id: 7)])
+        ->columns([TextColumn::make('title')])
+        ->recordActions([Action::make('edit')->hidden()]));
+
+    $html = renderToHtml($host->getTable());
+
+    expect($html)->not->toContain('sy-ta-actions');
+});
+
+it('clones per row so a record-dependent url differs across rows', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->records(fn (): array => [new Song('Airbag', 'OK Computer', id: 7), new Song('Let Down', 'OK Computer', id: 8)])
+        ->columns([TextColumn::make('title')])
+        ->recordActions([Action::make('edit')->url(fn (Song $record): string => '/songs/' . $record->id)]));
+
+    $crawler = new Crawler(renderToHtml($host->getTable()));
+
+    expect($crawler->filter('a[href="/songs/7"]')->count())->toBe(1)
+        ->and($crawler->filter('a[href="/songs/8"]')->count())->toBe(1);
 });

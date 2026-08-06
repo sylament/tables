@@ -23,6 +23,10 @@
         @apply px-3 py-3.5 text-start text-sm font-semibold whitespace-nowrap text-gray-950 sm:first-of-type:ps-6 sm:last-of-type:pe-6 dark:text-white;
     }
 
+    & .sy-ta-empty-header-cell {
+        @apply w-1;
+    }
+
     & .sy-ta-row {
         @apply [@media(hover:hover)]:transition-colors [@media(hover:hover)]:duration-75;
     }
@@ -32,6 +36,14 @@
 
         & .sy-ta-col {
             @apply flex w-full justify-start text-start;
+        }
+    }
+
+    & .sy-ta-actions {
+        @apply flex max-w-full shrink-0 items-center justify-end gap-3;
+
+        & > * {
+            @apply shrink-0;
         }
     }
 

@@ -53,5 +53,5 @@ it('builds the table through the container so its closures reach the container',
     ));
 
     expect($host->getTable()->getInvoker())->toBe($invoker)
-        ->and($host->getTableRecords())->toBe($this::getContainer()->get(SongRepository::class)->all());
+        ->and(array_values($host->getTableRecords()))->toBe($this::getContainer()->get(SongRepository::class)->all());
 });

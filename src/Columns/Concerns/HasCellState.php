@@ -10,6 +10,11 @@ trait HasCellState
 {
     protected mixed $getStateUsing = null;
 
+    /**
+     * @var array<string, mixed>
+     */
+    protected array $cachedState = [];
+
     public function getStateUsing(mixed $callback): static
     {
         $this->getStateUsing = $callback;
@@ -23,6 +28,21 @@ trait HasCellState
     }
 
     public function getState(): mixed
+    {
+        $recordKey = $this->getRecordKey();
+
+        if ($recordKey === null) {
+            return $this->resolveState();
+        }
+
+        if (array_key_exists($recordKey, $this->cachedState)) {
+            return $this->cachedState[$recordKey];
+        }
+
+        return $this->cachedState[$recordKey] = $this->resolveState();
+    }
+
+    protected function resolveState(): mixed
     {
         return ($this->getStateUsing !== null)
             ? $this->evaluate($this->getStateUsing)
@@ -46,5 +66,10 @@ trait HasCellState
         } catch (AccessException) {
             return null;
         }
+    }
+
+    public function clearCachedState(): void
+    {
+        $this->cachedState = [];
     }
 }

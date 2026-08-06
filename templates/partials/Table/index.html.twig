@@ -1,5 +1,11 @@
 {% set records = component.getRecords %}
 {% set columns = component.getColumns %}
+{% set hostId = component.getLiveComponent.getTableHostId %}
+
+{% set recordActionsByKey = component.getVisibleRecordActionsByRecordKey %}
+{% set hasRecordActions = recordActionsByKey|filter(actions => actions is not empty)|length > 0 %}
+{% set actionsLeading = hasRecordActions and component.getRecordActionsPosition.name in ['BeforeCells', 'BeforeColumns'] %}
+{% set actionsTrailing = hasRecordActions and component.getRecordActionsPosition.name in ['AfterColumns', 'AfterCells'] %}
 
 {% set emptyStateIcon = component.getEmptyStateIcon %}
 {% set emptyStateDescription = component.getEmptyStateDescription %}
@@ -26,20 +32,45 @@
             <table class="sy-ta-table">
                 <thead>
                     <tr>
+                        {% if actionsLeading %}
+                            <th scope="col" aria-label="Actions" class="sy-ta-actions-header-cell sy-ta-empty-header-cell"></th>
+                        {% endif %}
                         {% for column in columns %}
                             <th scope="col" class="sy-ta-header-cell">{{ column.getLabel }}</th>
                         {% endfor %}
+                        {% if actionsTrailing %}
+                            <th scope="col" aria-label="Actions" class="sy-ta-actions-header-cell sy-ta-empty-header-cell"></th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
-                    {% for record in records %}
-                        <tr class="sy-ta-row">
+                    {% for recordKey, record in records %}
+                        <tr class="sy-ta-row" id="{{ hostId ~ '.table.records.' ~ recordKey }}">
+                            {% if actionsLeading %}
+                                <td class="sy-ta-cell">
+                                    <div class="sy-ta-actions">
+                                        {% for action in recordActionsByKey[recordKey] ?? [] %}
+                                            {{ renderComponent(action) }}
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                            {% endif %}
                             {% for column in columns %}
                                 {% do column.record(record) %}
-                                <td class="sy-ta-cell">
+                                {% do column.recordKey(recordKey) %}
+                                <td class="sy-ta-cell" id="{{ hostId ~ '.table.record.' ~ recordKey ~ '.column.' ~ column.getName }}">
                                     <div class="sy-ta-col">{{ renderComponent(column) }}</div>
                                 </td>
                             {% endfor %}
+                            {% if actionsTrailing %}
+                                <td class="sy-ta-cell">
+                                    <div class="sy-ta-actions">
+                                        {% for action in recordActionsByKey[recordKey] ?? [] %}
+                                            {{ renderComponent(action) }}
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                            {% endif %}
                         </tr>
                     {% endfor %}
                 </tbody>

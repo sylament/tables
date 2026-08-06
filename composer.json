@@ -14,10 +14,12 @@
     ],
     "require": {
         "php": "^8.5",
+        "sylament/actions": "self.version",
         "sylament/schemas": "self.version",
         "sylament/support": "self.version",
         "symfony/property-access": "^8.1",
         "symfony/string": "^8.1",
+        "symfony/ux-live-component": "^3.1",
         "symfony/ux-twig-component": "^3.1"
     },
     "autoload": {
