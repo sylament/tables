@@ -15,6 +15,7 @@
     "require": {
         "php": "^8.5",
         "ext-mbstring": "*",
+        "doctrine/orm": "^3.6",
         "sylament/actions": "self.version",
         "sylament/schemas": "self.version",
         "sylament/support": "self.version",

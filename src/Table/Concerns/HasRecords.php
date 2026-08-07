@@ -11,6 +11,13 @@ trait HasRecords
 {
     protected ?Closure $dataSource = null;
 
+    /**
+     * @var class-string|null
+     */
+    protected ?string $cachedRecordClass = null;
+
+    protected bool $hasCachedRecordClass = false;
+
     public function records(?Closure $dataSource): static
     {
         $this->dataSource = $dataSource;
@@ -21,6 +28,29 @@ trait HasRecords
     public function getDataSource(): ?Closure
     {
         return $this->dataSource;
+    }
+
+    /**
+     * Whether the table is on the query lane — a records closure wins over a
+     * declared query, so this asks only whether one is set.
+     */
+    public function hasQuery(): bool
+    {
+        return $this->dataSource === null;
+    }
+
+    /**
+     * @return class-string|null
+     */
+    public function getRecordClass(): ?string
+    {
+        if ($this->hasCachedRecordClass) {
+            return $this->cachedRecordClass;
+        }
+
+        $this->hasCachedRecordClass = true;
+
+        return $this->cachedRecordClass = array_first($this->getBaseQuery()?->getRootEntities() ?? []);
     }
 
     /**

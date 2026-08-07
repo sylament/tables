@@ -5,6 +5,13 @@ declare(strict_types=1);
 namespace Sylament\Tables\Table\Concerns;
 
 use Closure;
+use Doctrine\ORM\Query\Expr\Orx;
+use Doctrine\ORM\QueryBuilder;
+use Stringable;
+use Sylament\Tables\Query\ColumnPathResolver;
+use Sylament\Tables\Query\SearchConstraint;
+
+use function Sylament\Support\filled;
 
 trait CanSearchRecords
 {
@@ -20,6 +27,10 @@ trait CanSearchRecords
     protected ?string $searchDebounce = null;
 
     protected bool|Closure $isSearchOnBlur = false;
+
+    protected bool|Closure $shouldSplitSearchTerms = true;
+
+    protected ?Closure $searchUsing = null;
 
     /**
      * @param bool|array<string|Closure> $condition
@@ -116,5 +127,77 @@ trait CanSearchRecords
     public function getExtraSearchableColumns(): array
     {
         return $this->extraSearchableColumns;
+    }
+
+    public function splitSearchTerms(bool|Closure $condition = true): static
+    {
+        $this->shouldSplitSearchTerms = $condition;
+
+        return $this;
+    }
+
+    public function shouldSplitSearchTerms(): bool
+    {
+        return (bool) $this->evaluate($this->shouldSplitSearchTerms);
+    }
+
+    public function searchUsing(?Closure $searchUsing): static
+    {
+        $this->searchUsing = $searchUsing;
+
+        return $this;
+    }
+
+    public function hasSearchUsingCallback(): bool
+    {
+        return filled($this->searchUsing);
+    }
+
+    public function callSearchUsing(QueryBuilder $query, string $search): void
+    {
+        $this->evaluate($this->searchUsing, [
+            'query' => $query,
+            'search' => $search,
+        ]);
+    }
+
+    public function applyExtraSearchConstraints(QueryBuilder $query, Orx $searchExpression, string $search): void
+    {
+        foreach (array_filter($this->getExtraSearchableColumns(), filled(...)) as $column) {
+            if ($column instanceof Closure) {
+                $constraint = $this->evaluateExtraSearchConstraint($column, $query, $search);
+
+                if ($constraint instanceof QueryBuilder) {
+                    continue;
+                }
+
+                if (is_string($constraint) || $constraint instanceof Stringable) {
+                    $searchExpression->add($constraint);
+                }
+
+                continue;
+            }
+
+            $searchExpression->add(SearchConstraint::like(
+                $query,
+                ColumnPathResolver::resolve($query, $column),
+                $search,
+                forceCaseInsensitive: null,
+            ));
+        }
+    }
+
+    /**
+     * Whatever an extra searchable column's closure returned — an expression to
+     * add to the search group, or the builder it constrained itself, which joins
+     * nothing.
+     */
+    protected function evaluateExtraSearchConstraint(Closure $column, QueryBuilder $query, string $search): mixed
+    {
+        return $this->evaluate($column, [
+            'query' => $query,
+            'search' => $search,
+            'searchQuery' => $search,
+        ]);
     }
 }

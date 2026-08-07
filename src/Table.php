@@ -15,6 +15,7 @@ use Sylament\Tables\Table\Concerns\CanSortRecords;
 use Sylament\Tables\Table\Concerns\HasActions;
 use Sylament\Tables\Table\Concerns\HasColumns;
 use Sylament\Tables\Table\Concerns\HasEmptyState;
+use Sylament\Tables\Table\Concerns\HasQuery;
 use Sylament\Tables\Table\Concerns\HasRecordActions;
 use Sylament\Tables\Table\Concerns\HasRecords;
 
@@ -27,6 +28,7 @@ class Table extends ViewComponent
     use HasActions;
     use HasColumns;
     use HasEmptyState;
+    use HasQuery;
     use HasRecordActions;
     use HasRecords;
 

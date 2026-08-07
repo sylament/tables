@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Sylament\Tables\Tests\Integration;
 
+use Sylament\Support\Pagination\Paginator;
+use Sylament\Tables\Columns\TextColumn;
 use Sylament\Tables\Contracts\InteractsWithTable;
+use Sylament\Tables\Table;
+use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
 use Sylament\Tables\Tests\Fixtures\Twig\Components\BrowsableSongsTable;
 use Sylament\Tables\Tests\Fixtures\Twig\Components\ExtremeLinksSongsTable;
 use Sylament\Tables\Twig\Extension\TableExtension;
@@ -59,6 +63,31 @@ function extremeLinksTableHtml(int $page = 1): string
 function songsTableHtml(): string
 {
     return browsingTwig()->render('@TablesFixtures/table_extension_page.html.twig');
+}
+
+/**
+ * @param list<array<string, string>> $records
+ */
+function simplePaginatedTableHtml(int $page, array $records, bool $hasMoreRecords = false): string
+{
+    $component = new TableHost(fn (Table $table): Table => $table
+        ->records(function (int $page, int|string|null $recordsPerPage) use ($records, $hasMoreRecords): Paginator {
+            assert(is_int($recordsPerPage));
+
+            return new Paginator(
+                records: $records,
+                totalRecordCount: null,
+                page: $page,
+                recordsPerPage: $recordsPerPage,
+                hasMoreRecords: $hasMoreRecords,
+            );
+        })
+        ->columns([TextColumn::make('title')])
+        ->paginated([2, 5]));
+
+    $component->tablePage = $page;
+
+    return renderTableHost($component);
 }
 
 it('renders a sortable header as an aria-annotated live action button', function (): void {
@@ -141,6 +170,19 @@ it('adds the first and last page links when extreme links are on', function (): 
         ->and(new Crawler(browsableTableHtml(page: 2))->filter('.sy-pagination-items button[rel="first"]')->count())->toBe(0);
 });
 
+it('renders the footer chevrons at the default icon size', function (): void {
+    $chevrons = new Crawler(extremeLinksTableHtml(page: 2))
+        ->filter('.sy-pagination-items button[rel] svg.sy-icon');
+
+    expect($chevrons->each(fn (Crawler $icon): ?string => $icon->closest('button')?->attr('rel')))
+        ->toBe(['first', 'prev', 'next', 'last']);
+
+    foreach ($chevrons->each(fn (Crawler $icon): array => explode(' ', (string) $icon->attr('class'))) as $classes) {
+        expect($classes)->toContain('sy-size-md')
+            ->and($classes)->not->toContain('sy-size-sm');
+    }
+});
+
 it('renders no footer and no toolbar for a plain unpaginated, unsearchable table', function (): void {
     $html = songsTableHtml();
 
@@ -153,4 +195,54 @@ it('keeps the footer beside the empty state on an overflow page', function (): v
 
     expect($crawler->filter('.sy-ta-empty-state')->count())->toBe(1)
         ->and($crawler->filter('nav.sy-pagination')->count())->toBe(1);
+});
+
+it('renders the simple footer without a window when the paginator has no total', function (): void {
+    $crawler = new Crawler(simplePaginatedTableHtml(page: 2, records: [
+        ['__key' => '3', 'title' => 'Song 03'],
+        ['__key' => '4', 'title' => 'Song 04'],
+    ], hasMoreRecords: true));
+
+    $overview = $crawler->filter('.sy-pagination-overview')->text();
+
+    expect($crawler->filter('nav.sy-pagination')->count())->toBe(1)
+        ->and($overview)->toContain('Showing 3 to 4 results')
+        ->and($overview)->not->toContain(' of ');
+
+    $items = $crawler->filter('ol.sy-pagination-items button');
+
+    expect($crawler->filter('.sy-pagination-gap')->count())->toBe(0)
+        ->and($items->each(fn (Crawler $item): ?string => $item->attr('rel')))->toBe(['prev', 'next']);
+
+    $previous = $crawler->filter('ol.sy-pagination-items button[rel="prev"]');
+    $next = $crawler->filter('ol.sy-pagination-items button[rel="next"]');
+
+    expect($previous->attr('data-live-action-param'))->toBe('gotoTablePage')
+        ->and($previous->attr('data-live-page-param'))->toBe('1')
+        ->and($next->attr('data-live-action-param'))->toBe('gotoTablePage')
+        ->and($next->attr('data-live-page-param'))->toBe('3');
+
+    $select = $crawler->filter('select.sy-pagination-per-page-select');
+
+    expect($select->count())->toBe(1)
+        ->and($select->attr('data-model'))->toBe('tableRecordsPerPage');
+});
+
+it('suppresses the footer for an empty simple first page', function (): void {
+    $html = simplePaginatedTableHtml(page: 1, records: []);
+
+    expect($html)->not->toContain('sy-pagination')
+        ->and(new Crawler($html)->filter('.sy-ta-empty-state')->count())->toBe(1);
+});
+
+it('keeps the simple footer on an empty page past the data', function (): void {
+    $crawler = new Crawler(simplePaginatedTableHtml(page: 3, records: []));
+
+    $overview = $crawler->filter('.sy-pagination-overview')->text();
+
+    expect($crawler->filter('.sy-ta-empty-state')->count())->toBe(1)
+        ->and($crawler->filter('nav.sy-pagination')->count())->toBe(1)
+        ->and($overview)->toContain('Showing 0 results')
+        ->and($overview)->not->toContain(' of ')
+        ->and($crawler->filter('ol.sy-pagination-items button')->each(fn (Crawler $item): ?string => $item->attr('rel')))->toBe(['prev']);
 });

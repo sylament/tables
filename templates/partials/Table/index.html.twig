@@ -3,6 +3,9 @@
 {% set hostId = component.getLiveComponent.getTableHostId %}
 
 {% set paginator = component.getPaginator %}
+{% set footerVisible = paginator and (paginator.getTotalRecordCount is null
+    ? (paginator.count > 0 or not paginator.onFirstPage or paginator.hasMorePages)
+    : paginator.getTotalRecordCount > 0) %}
 {% set sortColumn = component.getSortColumn %}
 {% set sortDirection = component.getSortDirection %}
 {% set isSearchable = component.isSearchable %}
@@ -133,7 +136,7 @@
             </table>
         {% endif %}
 
-        {% if paginator and paginator.getTotalRecordCount > 0 %}
+        {% if footerVisible %}
             <twig:SylamentSupport:Pagination
                 :paginator="paginator"
                 :pageOptions="component.getPaginationPageOptions"

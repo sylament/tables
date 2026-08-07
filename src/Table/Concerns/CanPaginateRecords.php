@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Sylament\Tables\Table\Concerns;
 
 use Closure;
+use Sylament\Tables\Enums\PaginationMode;
 
 trait CanPaginateRecords
 {
@@ -18,6 +19,8 @@ trait CanPaginateRecords
     protected array|Closure|null $paginationPageOptions = null;
 
     protected bool|Closure $hasExtremePaginationLinks = false;
+
+    protected PaginationMode|Closure|null $paginationMode = null;
 
     public function defaultPaginationPageOption(int|string|Closure|null $option): static
     {
@@ -58,6 +61,13 @@ trait CanPaginateRecords
         return $this;
     }
 
+    public function paginationMode(PaginationMode|Closure|null $mode): static
+    {
+        $this->paginationMode = $mode;
+
+        return $this;
+    }
+
     public function getDefaultPaginationPageOption(): int|string|null
     {
         $option = $this->evaluate($this->defaultPaginationPageOption);
@@ -91,5 +101,10 @@ trait CanPaginateRecords
     public function hasExtremePaginationLinks(): bool
     {
         return (bool) $this->evaluate($this->hasExtremePaginationLinks);
+    }
+
+    public function getPaginationMode(): PaginationMode
+    {
+        return $this->evaluate($this->paginationMode) ?? PaginationMode::Default;
     }
 }

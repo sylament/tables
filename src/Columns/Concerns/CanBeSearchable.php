@@ -23,6 +23,8 @@ trait CanBeSearchable
 
     protected ?Closure $searchQuery = null;
 
+    protected bool|Closure|null $isSearchForcedCaseInsensitive = null;
+
     /**
      * @param bool|array<string>|string|Closure $condition
      */
@@ -47,6 +49,21 @@ trait CanBeSearchable
         return $this;
     }
 
+    public function forceSearchCaseInsensitive(bool|Closure|null $condition = true): static
+    {
+        $this->isSearchForcedCaseInsensitive = $condition;
+
+        return $this;
+    }
+
+    /**
+     * @return array<string>
+     */
+    public function getSearchColumns(): array
+    {
+        return $this->searchColumns ?? [$this->getName()];
+    }
+
     public function isSearchable(): bool
     {
         return (bool) $this->evaluate($this->isSearchable);
@@ -60,5 +77,10 @@ trait CanBeSearchable
     public function isIndividuallySearchable(): bool
     {
         return $this->isSearchable() && $this->isIndividuallySearchable;
+    }
+
+    public function isSearchForcedCaseInsensitive(): ?bool
+    {
+        return $this->evaluate($this->isSearchForcedCaseInsensitive);
     }
 }

@@ -35,6 +35,14 @@ trait CanBeSortable
         return $this;
     }
 
+    /**
+     * @return array<string>
+     */
+    public function getSortColumns(): array
+    {
+        return $this->sortColumns ?? [$this->getName()];
+    }
+
     public function isSortable(): bool
     {
         return (bool) $this->evaluate($this->isSortable);

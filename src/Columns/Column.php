@@ -15,6 +15,7 @@ use Sylament\Tables\Columns\Concerns\HasCellState;
 use Sylament\Tables\Columns\Concerns\HasLabel;
 use Sylament\Tables\Columns\Concerns\HasName;
 use Sylament\Tables\Columns\Concerns\HasRecord;
+use Sylament\Tables\Columns\Concerns\InteractsWithTableQuery;
 
 use function Sylament\Support\blank;
 
@@ -28,6 +29,7 @@ class Column extends ViewComponent
     use HasLabel;
     use HasName;
     use HasRecord;
+    use InteractsWithTableQuery;
 
     protected string $evaluationIdentifier = 'column';
 

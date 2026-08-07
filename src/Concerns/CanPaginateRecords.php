@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Sylament\Tables\Concerns;
 
+use Doctrine\ORM\QueryBuilder;
+use Doctrine\ORM\Tools\Pagination\Paginator as DoctrinePaginator;
+use LogicException;
+use Sylament\Support\Pagination\Paginator;
+use Sylament\Tables\Enums\PaginationMode;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveArg;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
@@ -18,8 +23,18 @@ trait CanPaginateRecords
      * reader and validates on every call, so a forged value can never reach a
      * `records()` closure.
      */
-    #[LiveProp(writable: true, onUpdated: 'updatedTableRecordsPerPage')]
+    #[LiveProp(writable: true, dehydrateWith: 'dehydrateTableRecordsPerPage', onUpdated: 'updatedTableRecordsPerPage')]
     public ?string $tableRecordsPerPage = null;
+
+    /**
+     * The dehydration pass reads this prop through `getTableRecordsPerPage()`,
+     * so `$value` is the resolved option; the wire carries it as the string the
+     * `<select>` bound to the prop holds.
+     */
+    public function dehydrateTableRecordsPerPage(int|string|null $value): ?string
+    {
+        return $value === null ? null : (string) $value;
+    }
 
     #[LiveAction]
     public function gotoTablePage(#[LiveArg] int $page): void
@@ -35,6 +50,10 @@ trait CanPaginateRecords
 
     public function updatedTableRecordsPerPage(mixed $previousValue = null): void
     {
+        if ($previousValue === $this->tableRecordsPerPage) {
+            return;
+        }
+
         $this->tablePage = 1;
         $this->flushCachedTableRecords();
     }
@@ -67,5 +86,47 @@ trait CanPaginateRecords
         }
 
         return $table->getDefaultPaginationPageOption();
+    }
+
+    protected function paginateTableQuery(QueryBuilder $query): Paginator
+    {
+        $mode = $this->getTable()->getPaginationMode();
+
+        if ($mode === PaginationMode::Cursor) {
+            throw new LogicException(sprintf('Table [%s] requests cursor pagination, which needs a keyset carrier the toolkit does not ship yet; use PaginationMode::Default or PaginationMode::Simple.', static::class));
+        }
+
+        $page = $this->getTablePage();
+        $recordsPerPage = $this->getTableRecordsPerPage() ?? 'all';
+
+        if ($recordsPerPage === 'all') {
+            /** @var list<object|array<string, mixed>> $allRecords */
+            $allRecords = $query->getQuery()->getResult();
+
+            return new Paginator($this->keyTableRecords($allRecords), count($allRecords), $page, 'all');
+        }
+
+        $recordsPerPage = (int) $recordsPerPage;
+        $fetchJoinCollection = $query->getDQLPart('join') !== [];
+
+        $query->setFirstResult(($page - 1) * $recordsPerPage);
+        $query->setMaxResults($mode === PaginationMode::Simple ? $recordsPerPage + 1 : $recordsPerPage);
+
+        $doctrinePaginator = new DoctrinePaginator($query->getQuery(), $fetchJoinCollection);
+
+        /** @var list<object|array<string, mixed>> $records */
+        $records = iterator_to_array($doctrinePaginator->getIterator(), preserve_keys: false);
+
+        if ($mode === PaginationMode::Simple) {
+            return new Paginator(
+                $this->keyTableRecords(array_slice($records, 0, $recordsPerPage)),
+                totalRecordCount: null,
+                page: $page,
+                recordsPerPage: $recordsPerPage,
+                hasMoreRecords: count($records) > $recordsPerPage,
+            );
+        }
+
+        return new Paginator($this->keyTableRecords($records), $doctrinePaginator->count(), $page, $recordsPerPage);
     }
 }
