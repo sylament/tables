@@ -6,6 +6,7 @@ namespace Sylament\Tables\Columns;
 
 use LogicException;
 use Sylament\Schemas\Components\Concerns\CanAccessProperties;
+use Sylament\Support\Components\Concerns\HasAlignment;
 use Sylament\Support\Components\ViewComponent;
 use Sylament\Support\Evaluation\ClosureParameter;
 use Sylament\Tables\Columns\Concerns\BelongsToTable;
@@ -25,6 +26,7 @@ class Column extends ViewComponent
     use CanAccessProperties;
     use CanBeSearchable;
     use CanBeSortable;
+    use HasAlignment;
     use HasCellState;
     use HasLabel;
     use HasName;

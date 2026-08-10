@@ -1,3 +1,145 @@
 .sy-ta-text {
-    @apply w-full px-3 py-4 text-sm leading-6 text-gray-950 dark:text-white;
+    @apply w-full px-3 py-4;
+
+    &.sy-ta-text-has-descriptions {
+        @apply flex flex-col;
+
+        &.sy-ta-text-has-badges {
+            @apply flex-row flex-wrap gap-x-1.5 gap-y-2;
+
+            & > .sy-ta-text-description {
+                @apply w-full;
+            }
+        }
+
+        &:not(.sy-ta-text-has-badges) {
+            @apply gap-y-1;
+        }
+    }
+
+    &.sy-ta-text-has-badges:not(.sy-ta-text-has-descriptions) {
+        @apply flex gap-x-1.5;
+
+        &.sy-wrapped {
+            @apply flex-wrap gap-y-1;
+        }
+    }
+
+    &.sy-wrapped:not(.sy-ta-text-has-badges) {
+        @apply whitespace-normal;
+    }
+
+    &.sy-align-center {
+        @apply text-center;
+    }
+
+    &.sy-align-end,
+    &.sy-align-right {
+        @apply text-end;
+    }
+
+    &.sy-align-justify,
+    &.sy-align-between {
+        @apply text-justify;
+    }
+
+    & > .sy-ta-text-description {
+        @apply text-sm text-gray-500 dark:text-gray-400;
+    }
+}
+
+.sy-ta-text-item {
+    @apply text-gray-950 dark:text-white;
+
+    @apply line-clamp-(--sy-line-clamp,none);
+
+    &.sy-color {
+        @apply text-(--sy-text) dark:text-(--sy-dark-text);
+    }
+
+    &.sy-color-gray {
+        @apply text-gray-500 dark:text-gray-400;
+    }
+
+    &.sy-size-xs {
+        @apply text-xs;
+    }
+
+    &.sy-size-sm {
+        @apply text-sm leading-6;
+    }
+
+    &.sy-size-md {
+        @apply text-base;
+    }
+
+    &.sy-size-lg {
+        @apply text-lg;
+    }
+
+    &.sy-font-thin {
+        @apply font-thin;
+    }
+
+    &.sy-font-extralight {
+        @apply font-extralight;
+    }
+
+    &.sy-font-light {
+        @apply font-light;
+    }
+
+    &.sy-font-normal {
+        @apply font-normal;
+    }
+
+    &.sy-font-medium {
+        @apply font-medium;
+    }
+
+    &.sy-font-semibold {
+        @apply font-semibold;
+    }
+
+    &.sy-font-bold {
+        @apply font-bold;
+    }
+
+    &.sy-font-extrabold {
+        @apply font-extrabold;
+    }
+
+    &.sy-font-black {
+        @apply font-black;
+    }
+
+    &.sy-font-sans {
+        @apply font-sans;
+    }
+
+    &.sy-font-serif {
+        @apply font-serif;
+    }
+
+    &.sy-font-mono {
+        @apply font-mono;
+    }
+
+    & > .sy-icon {
+        @apply inline-block shrink-0 text-gray-400 dark:text-gray-500;
+
+        /* The gap `Button` and `Link` put on their container, as a margin: the line clamp owns
+           this element's `display`, so there is no flex or grid box here to hang a gap on. */
+        &.sy-ta-text-icon-before {
+            @apply me-1.5;
+        }
+
+        &.sy-ta-text-icon-after {
+            @apply ms-1.5;
+        }
+
+        &.sy-color {
+            @apply text-color-500;
+        }
+    }
 }
