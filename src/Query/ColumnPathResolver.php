@@ -24,6 +24,6 @@ final class ColumnPathResolver
             return $path;
         }
 
-        throw new LogicException(sprintf('Cannot resolve [%s] on the table query: [%s] is not an alias on the builder. Join and alias the relation in query(), or take over with sortable(query:)/searchable(query:); automatic relationship traversal arrives with the Doctrine relation layer.', $path, $alias));
+        throw new LogicException(sprintf('Cannot resolve [%s] on the table query: [%s] is not an alias on the builder. Join and alias the relation in query(), or take over with sortable(query:)/searchable(query:); a table resolves no relationship of its own.', $path, $alias));
     }
 }
