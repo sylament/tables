@@ -9,6 +9,7 @@ use Doctrine\ORM\Tools\Pagination\Paginator as DoctrinePaginator;
 use LogicException;
 use Sylament\Support\Pagination\Paginator;
 use Sylament\Tables\Enums\PaginationMode;
+use Sylament\Tables\Query\JoinCardinality;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveArg;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
@@ -107,7 +108,7 @@ trait CanPaginateRecords
         }
 
         $recordsPerPage = (int) $recordsPerPage;
-        $fetchJoinCollection = $query->getDQLPart('join') !== [];
+        $fetchJoinCollection = JoinCardinality::joinsCollection($query);
 
         $query->setFirstResult(($page - 1) * $recordsPerPage);
         $query->setMaxResults($mode === PaginationMode::Simple ? $recordsPerPage + 1 : $recordsPerPage);

@@ -17,6 +17,7 @@
         "ext-mbstring": "*",
         "doctrine/orm": "^3.6",
         "sylament/actions": "self.version",
+        "sylament/forms": "self.version",
         "sylament/schemas": "self.version",
         "sylament/support": "self.version",
         "symfony/property-access": "^8.1",

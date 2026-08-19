@@ -9,6 +9,10 @@
 {% set sortColumn = component.getSortColumn %}
 {% set sortDirection = component.getSortDirection %}
 {% set isSearchable = component.isSearchable %}
+{% set isFilterable = component.isFilterable %}
+{% set filtersTriggerVisible = isFilterable and component.hasFiltersDropdown %}
+{% set filterIndicators = component.getFilterIndicators %}
+{% set removableIndicatorCount = filterIndicators|filter(carrier => carrier.indicator.isRemovable)|length %}
 
 {% set recordActionsByKey = component.getVisibleRecordActionsByRecordKey %}
 {% set hasRecordActions = recordActionsByKey|filter(actions => actions is not empty)|length > 0 %}
@@ -20,24 +24,111 @@
 
 <div class="sy sy-ta">
     <div class="sy-ta-ctn">
-        {% if isSearchable %}
+        {% if isSearchable or filtersTriggerVisible %}
             <div class="sy-ta-header-toolbar">
-                <label class="sy-ta-search-field">
-                    <twig:SylamentSupport:Icon
-                        icon="heroicons:magnifying-glass"
-                        :alias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::SEARCH_FIELD')"
+                <div class="sy-ta-header-toolbar-end">
+                    {% if isSearchable %}
+                        <label class="sy-ta-search-field">
+                            <twig:SylamentSupport:Icon
+                                icon="heroicons:magnifying-glass-20-solid"
+                                :alias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::SEARCH_FIELD')"
+                            />
+                            <input
+                                type="search"
+                                class="sy-ta-search-input"
+                                autocomplete="off"
+                                maxlength="1000"
+                                placeholder="{{ component.getSearchPlaceholder ?? 'Search' }}"
+                                aria-label="Search"
+                                data-model="{{ component.isSearchOnBlur ? 'on(change)|tableSearch' : 'debounce(' ~ component.getSearchDebounceMilliseconds ~ ')|tableSearch' }}"
+                            >
+                        </label>
+                    {% endif %}
+
+                    {% if filtersTriggerVisible %}
+                        {% set activeFiltersCount = component.getActiveFiltersCount %}
+                        {% set filtersApplyVisible = component.hasDeferredFilters %}
+                        {% set filtersResetActionPosition = component.getFiltersResetActionPosition %}
+                        {% set filtersForm %}{{ renderComponent(component.getLiveComponent.getTableFiltersForm) }}{% endset %}
+
+                        <twig:SylamentSupport:Dropdown
+                            class="sy-ta-filters-dropdown"
+                            placement="bottom-end"
+                            :flip="false"
+                            :teleport="true"
+                            :width="component.getFiltersFormWidth"
+                            :maxHeight="component.getFiltersFormMaxHeight"
+                        >
+                            <twig:block name="trigger">
+                                <span class="sy-ta-filters-trigger">
+                                    <twig:SylamentSupport:IconButton
+                                        icon="heroicons:funnel-20-solid"
+                                        :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::ACTIONS_FILTER')"
+                                        color="gray"
+                                        label="Filter"
+                                    />
+
+                                    {% if activeFiltersCount > 0 %}
+                                        <span class="sy-ta-filters-trigger-badge-ctn">
+                                            <twig:SylamentSupport:Badge class="sy-ta-filters-trigger-badge" size="xs">{{ activeFiltersCount }}</twig:SylamentSupport:Badge>
+                                        </span>
+                                    {% endif %}
+                                </span>
+                            </twig:block>
+
+                            <twig:block name="content">
+                                <twig:SylamentTables:Filters
+                                    :headingLevel="3"
+                                    :resetActionPosition="filtersResetActionPosition"
+                                    :schema="filtersForm"
+                                    :applyVisible="filtersApplyVisible"
+                                />
+                            </twig:block>
+                        </twig:SylamentSupport:Dropdown>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+
+        {% if filterIndicators is not empty %}
+            {% set removeAllAttributes = stimulus_action('live', 'action', parameters: {action: 'removeTableFilters'}) %}
+
+            <div class="sy-ta-filter-indicators">
+                <div class="sy-ta-filter-indicators-ctn">
+                    <span class="sy-ta-filter-indicators-label">Active filters</span>
+
+                    <div class="sy-ta-filter-indicators-badges-ctn">
+                        {% for carrier in filterIndicators %}
+                            {% set indicator = carrier.indicator %}
+                            {% set removeAttributes = indicator.isRemovable
+                                ? stimulus_action('live', 'action', parameters: {
+                                    action: carrier.removeAction,
+                                    ...carrier.removeArguments,
+                                }|filter(value => value is not null))
+                                : {} %}
+
+                            <twig:SylamentSupport:Badge
+                                class="sy-ta-filter-indicator"
+                                :color="indicator.getColor ?? 'primary'"
+                                :deletable="indicator.isRemovable"
+                                deleteLabel="Remove filter"
+                                :deleteAttributes="removeAttributes"
+                            >{{ indicator.getLabel }}</twig:SylamentSupport:Badge>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {% if removableIndicatorCount > 0 %}
+                    <twig:SylamentSupport:IconButton
+                        class="sy-ta-filter-indicators-remove-all-btn"
+                        icon="heroicons:x-mark-20-solid"
+                        :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::FILTERS_REMOVE_ALL_BUTTON')"
                         size="sm"
+                        color="gray"
+                        label="Remove all filters"
+                        {{ ...removeAllAttributes }}
                     />
-                    <input
-                        type="search"
-                        class="sy-ta-search-input"
-                        autocomplete="off"
-                        maxlength="1000"
-                        placeholder="{{ component.getSearchPlaceholder ?? 'Search' }}"
-                        aria-label="Search"
-                        data-model="{{ component.isSearchOnBlur ? 'on(change)|tableSearch' : 'debounce(' ~ component.getSearchDebounceMilliseconds ~ ')|tableSearch' }}"
-                    >
-                </label>
+                {% endif %}
             </div>
         {% endif %}
 
@@ -83,13 +174,12 @@
                                     >
                                         {{ column.getLabel }}
                                         <twig:SylamentSupport:Icon
-                                            :icon="isColumnSorted and sortDirection == 'asc' ? 'heroicons:chevron-up' : 'heroicons:chevron-down'"
+                                            :icon="isColumnSorted and sortDirection == 'asc' ? 'heroicons:chevron-up-20-solid' : 'heroicons:chevron-down-20-solid'"
                                             :alias="isColumnSorted
                                                 ? (sortDirection == 'asc'
                                                     ? constant('Sylament\\Tables\\Twig\\TablesIconAlias::HEADER_CELL_SORT_ASC_BUTTON')
                                                     : constant('Sylament\\Tables\\Twig\\TablesIconAlias::HEADER_CELL_SORT_DESC_BUTTON'))
                                                 : constant('Sylament\\Tables\\Twig\\TablesIconAlias::HEADER_CELL_SORT_BUTTON')"
-                                            size="sm"
                                         />
                                     </button>
                                 {% else %}

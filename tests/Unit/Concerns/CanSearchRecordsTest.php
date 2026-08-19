@@ -7,6 +7,9 @@ use Doctrine\ORM\QueryBuilder;
 use Sylament\Tables\Columns\TextColumn;
 use Sylament\Tables\Table;
 use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
+use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Address;
+use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Artist;
+use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Genre;
 use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Song;
 use Sylament\Tables\Tests\Fixtures\Doctrine\EntityManagerFactory;
 
@@ -25,6 +28,38 @@ function searchableSongs(): EntityManager
         $entityManager,
         new Song(1, 'Love Song', 10),
         new Song(2, 'Silent Love', 20),
+        new Song(3, 'Noise', 30),
+    );
+
+    return $entityManager;
+}
+
+/**
+ * One song carrying two genres and an artist, one carrying an artist alone, and
+ * one carrying neither — so a to-many term matching twice, a term matching
+ * across rows, and a term matching nothing related all have a subject.
+ */
+function searchableLibrary(): EntityManager
+{
+    $entityManager = EntityManagerFactory::create();
+
+    $radiohead = new Artist(1, 'Radiohead', address: new Address('Main St'));
+    $muse = new Artist(2, 'Muse', address: new Address('Back Rd'));
+    $rock = new Genre(1, 'Rock');
+    $pop = new Genre(2, 'Pop');
+
+    $alpha = new Song(1, 'Alpha', 10, $radiohead);
+    $alpha->getGenres()->add($rock);
+    $alpha->getGenres()->add($pop);
+
+    EntityManagerFactory::seed(
+        $entityManager,
+        $radiohead,
+        $muse,
+        $rock,
+        $pop,
+        $alpha,
+        new Song(2, 'Origin of Symmetry', 20, $muse),
         new Song(3, 'Noise', 30),
     );
 
@@ -239,4 +274,112 @@ it('names search parameters uniquely across words and columns', function (): voi
         ->and($query?->getParameter('sylament_search_2')?->getValue())->toBe('%song%')
         ->and($query?->getParameter('sylament_search_3')?->getValue())->toBe('%song%')
         ->and($query?->getQuery()->getSQL())->toContain('LIKE ? OR');
+});
+
+it('searches a to-one relation column', function (): void {
+    $entityManager = searchableLibrary();
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song'))
+        ->columns([TextColumn::make('title')->searchable(), TextColumn::make('artist.name')->searchable()]));
+
+    $host->tableSearch = 'radio';
+
+    $query = $host->getFilteredTableQuery();
+
+    expect(array_keys($host->getTableRecords()->getRecords()))->toBe([1])
+        ->and($query?->getDQL())->toContain(
+            'song.title LIKE :sylament_search_0',
+            'EXISTS (SELECT sy_x1.id FROM ' . Song::class . ' sy_x1 JOIN sy_x1.artist sy_x1_0 WHERE sy_x1.id = song.id AND sy_x1_0.name LIKE :sylament_search_1)',
+        )
+        ->and($query?->getDQLPart('join'))->toBe([]);
+});
+
+it('searches a to-many relation column without duplicating roots', function (): void {
+    $entityManager = searchableLibrary();
+    $configure = fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song'))
+        ->columns([TextColumn::make('genres.name')->searchable()]);
+    $oneGenre = new TableHost($configure);
+    $bothGenres = new TableHost($configure);
+
+    $oneGenre->tableSearch = 'ro';
+    $bothGenres->tableSearch = 'o';
+
+    expect($oneGenre->getFilteredTableQuery()?->getQuery()->getResult())->toHaveCount(1)
+        ->and($bothGenres->getFilteredTableQuery()?->getQuery()->getResult())->toHaveCount(1)
+        ->and($bothGenres->getAllTableRecordsCount())->toBe(1)
+        ->and(array_keys($bothGenres->getTableRecords()->getRecords()))->toBe([1])
+        ->and($bothGenres->getFilteredTableQuery()?->getDQLPart('join'))->toBe([]);
+});
+
+it('composes multi-word search as AND of per-word ORs across relation and plain columns', function (): void {
+    $entityManager = searchableLibrary();
+    $configure = fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song'))
+        ->columns([TextColumn::make('title')->searchable(), TextColumn::make('artist.name')->searchable()]);
+    $acrossRows = new TableHost($configure);
+    $sameRow = new TableHost($configure);
+
+    $acrossRows->tableSearch = 'muse alpha';
+    $sameRow->tableSearch = 'muse origin';
+
+    expect($acrossRows->getTableRecords()->getRecords())->toBe([])
+        ->and(array_keys($sameRow->getTableRecords()->getRecords()))->toBe([2])
+        ->and($sameRow->getFilteredTableQuery()?->getDQL())->toContain(
+            'sy_x1_0.name LIKE :sylament_search_1',
+            'song.title LIKE :sylament_search_2',
+            'sy_x3_0.name LIKE :sylament_search_3',
+        );
+});
+
+it('keeps the count in step with a relation search', function (): void {
+    $entityManager = searchableLibrary();
+    $configure = fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song')->orderBy('song.id'))
+        ->columns([TextColumn::make('title')->searchable(), TextColumn::make('genres.name')->searchable()])
+        ->paginated([1, 5]);
+    $counted = new TableHost($configure);
+    $paged = new TableHost($configure);
+
+    $counted->tableSearch = 'o';
+    $paged->tableSearch = 'o';
+
+    $paginator = $paged->getTableRecords();
+
+    expect($counted->getAllTableRecordsCount())->toBe(3)
+        ->and($paginator->getTotalRecordCount())->toBe(3)
+        ->and($paginator->getLastPage())->toBe(3)
+        ->and(array_keys($paginator->getRecords()))->toBe([1]);
+});
+
+it('searches an embeddable path as a plain field', function (): void {
+    $entityManager = searchableLibrary();
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('artist')->from(Artist::class, 'artist'))
+        ->columns([TextColumn::make('address.street')->searchable()]));
+
+    $host->tableSearch = 'main';
+
+    $query = $host->getFilteredTableQuery();
+
+    expect(array_keys($host->getTableRecords()->getRecords()))->toBe([1])
+        ->and($query?->getDQL())->toContain('WHERE artist.address.street LIKE :sylament_search_0')
+        ->and($query?->getDQL())->not->toContain('EXISTS');
+});
+
+it('table-level searchable([...]) reaches a relation path', function (): void {
+    $entityManager = searchableLibrary();
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song'))
+        ->columns([TextColumn::make('title')])
+        ->searchable(['artist.name']));
+
+    $host->tableSearch = 'muse';
+
+    $query = $host->getFilteredTableQuery();
+
+    expect(array_keys($host->getTableRecords()->getRecords()))->toBe([2])
+        ->and($query?->getDQL())
+        ->toContain('EXISTS (SELECT sy_x0.id FROM ' . Song::class . ' sy_x0 JOIN sy_x0.artist sy_x0_0 WHERE sy_x0.id = song.id AND sy_x0_0.name LIKE :sylament_search_0)')
+        ->and($query?->getDQLPart('join'))->toBe([]);
 });

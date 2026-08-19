@@ -124,21 +124,116 @@ it('forces case-insensitivity per column', function (): void {
         ->and(TextColumn::make('title')->forceSearchCaseInsensitive(fn (): bool => true)->isSearchForcedCaseInsensitive())->toBeTrue();
 });
 
-it('resolves alias-headed dotted names and refuses unknown heads', function (): void {
+it('resolves alias-headed dotted names, joins unaliased ones, and refuses unknown heads', function (): void {
     $entityManager = EntityManagerFactory::create();
     $joined = $entityManager->createQueryBuilder()
         ->select('song')->from(Song::class, 'song')
         ->leftJoin('song.artist', 'artist');
     $unjoined = $entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song');
-    $table = new TableHost(fn (Table $table): Table => $table
-        ->columns([TextColumn::make('artist.name')->sortable()]))->getTable();
+    $unknown = $entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song');
+    $table = new TableHost(fn (Table $table): Table => $table->columns([
+        TextColumn::make('artist.name')->sortable(),
+        TextColumn::make('publisher.name')->sortable(),
+    ]))->getTable();
     $column = $table->getColumn('artist.name');
 
     $column?->applySort($joined);
+    $column?->applySort($unjoined);
 
     expect($joined->getDQL())->toContain('ORDER BY artist.name asc')
-        ->and($joined->getQuery()->getSQL())->toContain('ORDER BY');
-    expect(fn (): ?QueryBuilder => $column?->applySort($unjoined))->toThrow(LogicException::class, 'is not an alias on the builder');
+        ->and($joined->getQuery()->getSQL())->toContain('ORDER BY')
+        ->and($unjoined->getDQL())->toContain('LEFT JOIN song.artist sy_artist', 'ORDER BY sy_artist.name asc')
+        ->and($unjoined->getQuery()->getSQL())->toContain('ORDER BY');
+    expect(fn (): ?QueryBuilder => $table->getColumn('publisher.name')?->applySort($unknown))
+        ->toThrow(LogicException::class, 'is not an alias on the builder, a mapped field path, or an association path');
+});
+
+it('leaves an alias-headed search path to the caller and still refuses an unknown head', function (): void {
+    $entityManager = EntityManagerFactory::create();
+    $joined = $entityManager->createQueryBuilder()
+        ->select('song')->from(Song::class, 'song')
+        ->leftJoin('song.artist', 'artist');
+    $unknown = $entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song');
+    $joinedExpression = $joined->expr()->orX();
+    $table = new TableHost(fn (Table $table): Table => $table->columns([
+        TextColumn::make('artist.name')->searchable(),
+        TextColumn::make('publisher.name')->searchable(),
+    ]))->getTable();
+
+    $table->getColumn('artist.name')?->applySearchConstraint($joined, $joinedExpression, 'foo');
+
+    expect((string) $joinedExpression)->toBe('artist.name LIKE :sylament_search_0')
+        ->and($joined->getDQL())->not->toContain('EXISTS');
+    expect(fn (): mixed => $table->getColumn('publisher.name')?->applySearchConstraint($unknown, $unknown->expr()->orX(), 'foo'))
+        ->toThrow(LogicException::class, 'is not an alias on the builder, a mapped field path, or an association path');
+});
+
+it('fetch-joins a to-one relation column, selecting every alias it crosses', function (): void {
+    $entityManager = EntityManagerFactory::create();
+    $oneHop = $entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song');
+    $twoHops = $entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song');
+    $embedded = $entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song');
+    $table = new TableHost(fn (Table $table): Table => $table->columns([
+        TextColumn::make('artist.name'),
+        TextColumn::make('artist.label.name'),
+        TextColumn::make('artist.address.street'),
+    ]))->getTable();
+
+    $table->getColumn('artist.name')?->applyEagerLoading($oneHop);
+    $table->getColumn('artist.label.name')?->applyEagerLoading($twoHops);
+    $table->getColumn('artist.address.street')?->applyEagerLoading($embedded);
+
+    expect($oneHop->getDQL())->toContain('SELECT song, sy_artist')
+        ->and($oneHop->getDQL())->toContain('LEFT JOIN song.artist sy_artist')
+        ->and($twoHops->getDQL())->toContain('SELECT song, sy_artist, sy_artist_label')
+        ->and($twoHops->getDQL())->toContain('LEFT JOIN song.artist sy_artist LEFT JOIN sy_artist.label sy_artist_label')
+        ->and($embedded->getDQL())->toContain('SELECT song, sy_artist')
+        ->and($embedded->getDQL())->toContain('LEFT JOIN song.artist sy_artist');
+});
+
+it('reuses the sort join for eager loading and selects the alias once', function (): void {
+    $query = EntityManagerFactory::create()->createQueryBuilder()->select('song')->from(Song::class, 'song');
+    $table = new TableHost(fn (Table $table): Table => $table->columns([
+        TextColumn::make('artist.name')->sortable(),
+    ]))->getTable();
+    $column = $table->getColumn('artist.name');
+
+    $column?->applySort($query);
+    $column?->applyEagerLoading($query);
+    $column?->applyEagerLoading($query);
+
+    expect(mb_substr_count($query->getDQL(), 'LEFT JOIN'))->toBe(1)
+        ->and($query->getDQL())->toContain('SELECT song, sy_artist FROM')
+        ->and($query->getDQL())->toContain('ORDER BY sy_artist.name asc');
+});
+
+it('leaves a dotless, to-many, alias-headed, unmapped or association-terminal column unjoined', function (): void {
+    $entityManager = EntityManagerFactory::create();
+    $queries = [];
+    $table = new TableHost(fn (Table $table): Table => $table->columns([
+        TextColumn::make('title'),
+        TextColumn::make('genres.name'),
+        TextColumn::make('artist.name'),
+        TextColumn::make('publisher.name'),
+        TextColumn::make('artist.label'),
+    ]))->getTable();
+
+    foreach (['title', 'genres.name', 'artist.name', 'publisher.name', 'artist.label'] as $name) {
+        $queries[$name] = $entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song');
+    }
+
+    $queries['artist.name']->leftJoin('song.artist', 'artist');
+
+    foreach ($queries as $name => $query) {
+        $table->getColumn($name)?->applyEagerLoading($query);
+    }
+
+    expect($queries['title']->getDQL())->toBe('SELECT song FROM ' . Song::class . ' song')
+        ->and($queries['genres.name']->getDQL())->toBe('SELECT song FROM ' . Song::class . ' song')
+        ->and($queries['publisher.name']->getDQL())->toBe('SELECT song FROM ' . Song::class . ' song')
+        ->and($queries['artist.label']->getDQL())->toBe('SELECT song FROM ' . Song::class . ' song')
+        ->and($queries['artist.name']->getDQL())->toContain('SELECT song FROM')
+        ->and($queries['artist.name']->getDQL())->not->toContain('sy_artist');
 });
 
 it('answers its sort and search column lists', function (): void {

@@ -12,6 +12,9 @@ use Stringable;
 use Sylament\Schemas\Components\Concerns\CanAccessProperties;
 use Sylament\Support\ArrayRecord;
 use Sylament\Support\Pagination\Paginator;
+use Sylament\Tables\Query\AggregateDeclaration;
+use Sylament\Tables\Query\AggregateQuery;
+use Sylament\Tables\Query\JoinCardinality;
 use Sylament\Tables\Table;
 use Symfony\Component\PropertyAccess\Exception\AccessException;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
@@ -24,6 +27,7 @@ trait HasTable
     use CanPaginateRecords;
     use CanSearchRecords;
     use CanSortRecords;
+    use HasFilters;
 
     /**
      * The morph-key prefix every row and cell of this host's table is stamped
@@ -78,7 +82,7 @@ trait HasTable
 
     public function filterTableQuery(QueryBuilder $query): QueryBuilder
     {
-        return $this->applySearchToTableQuery($query);
+        return $this->applySearchToTableQuery($this->applyFiltersToTableQuery($query));
     }
 
     public function getFilteredSortedTableQuery(): ?QueryBuilder
@@ -140,10 +144,8 @@ trait HasTable
     public function getTableRecordKey(object|array $record): string
     {
         if (is_array($record)) {
-            $key = $record[ArrayRecord::getKeyName()]
-                ?? throw new LogicException(sprintf('Record arrays must have a unique [%s] entry for identification.', ArrayRecord::getKeyName()));
-
-            return (string) $key;
+            return self::toRecordKey($record[ArrayRecord::getKeyName()] ?? null)
+                ?? throw new LogicException(sprintf('Record arrays must have a unique, printable [%s] entry for identification.', ArrayRecord::getKeyName()));
         }
 
         $queryRecordKey = $this->resolveQueryRecordKey($record);
@@ -158,12 +160,22 @@ trait HasTable
             $key = null;
         }
 
+        return self::toRecordKey($key)
+            ?? throw new LogicException(sprintf('Object records must expose a readable non-blank [id] for identification; [%s] does not. Give it one, or use array records with a [%s] entry.', get_debug_type($record), ArrayRecord::getKeyName()));
+    }
+
+    /**
+     * The printable form of a record key, or null when the value cannot
+     * identify a row — blank, or neither scalar nor `Stringable`.
+     */
+    private static function toRecordKey(mixed $key): ?string
+    {
         if ($key instanceof Stringable) {
             $key = (string) $key;
         }
 
-        if (!is_scalar($key) || blank($key)) {
-            throw new LogicException(sprintf('Object records must expose a readable non-blank [id] for identification; [%s] does not. Give it one, or use array records with a [%s] entry.', get_debug_type($record), ArrayRecord::getKeyName()));
+        if (blank($key) || !is_scalar($key)) {
+            return null;
         }
 
         return (string) $key;
@@ -183,7 +195,7 @@ trait HasTable
             $query = $this->getFilteredTableQuery();
 
             if ($query instanceof QueryBuilder) {
-                return new DoctrinePaginator($query->getQuery(), $query->getDQLPart('join') !== [])->count();
+                return new DoctrinePaginator($query->getQuery(), JoinCardinality::joinsCollection($query))->count();
             }
         }
 
@@ -206,30 +218,25 @@ trait HasTable
         $dataSource = $table->getDataSource();
 
         if ($dataSource instanceof Closure) {
-            $records = $table->evaluate($dataSource, [
+            return $this->keyDataSourceRecords($table->evaluate($dataSource, [
+                'filters' => fn (): array => $this->tableFilters,
                 'page' => fn (): int => $this->getTablePage(),
                 'recordsPerPage' => fn (): int|string|null => $this->getTableRecordsPerPage(),
                 'search' => fn (): ?string => $this->getTableSearch(),
                 'sort' => fn (): array => [$this->getTableSortColumn(), $this->getTableSortDirection()],
                 'sortColumn' => fn (): ?string => $this->getTableSortColumn(),
                 'sortDirection' => fn (): ?string => $this->getTableSortDirection(),
-            ]);
-
-            if ($records instanceof Paginator) {
-                return $records->withRecords($this->keyTableRecords($records->getRecords()));
-            }
-
-            if (!is_iterable($records)) {
-                throw new LogicException(sprintf('The [records()] closure of table [%s] must return an iterable or a [%s], got %s.', static::class, Paginator::class, get_debug_type($records)));
-            }
-
-            return $this->keyTableRecords($records);
+            ]));
         }
 
         $query = $this->getFilteredSortedTableQuery();
 
         if (!$query instanceof QueryBuilder) {
             throw new LogicException(sprintf('Table [%s] must have [records()] or [query()].', static::class));
+        }
+
+        foreach ($table->getColumns() as $column) {
+            $column->applyEagerLoading($query);
         }
 
         if (!$table->isPaginated()) {
@@ -243,7 +250,27 @@ trait HasTable
     }
 
     /**
-     * @param iterable<array-key, object|array<string, mixed>> $records
+     * The raw return of a `records()` closure — `mixed` because nothing
+     * constrains it.
+     *
+     * @return array<array-key, object|array<string, mixed>>|Paginator keyed by record key
+     */
+    private function keyDataSourceRecords(mixed $records): array|Paginator
+    {
+        if ($records instanceof Paginator) {
+            return $records->withRecords($this->keyTableRecords($records->getRecords()));
+        }
+
+        if (!is_iterable($records)) {
+            throw new LogicException(sprintf('The [records()] closure of table [%s] must return an iterable or a [%s], got %s.', static::class, Paginator::class, get_debug_type($records)));
+        }
+
+        return $this->keyTableRecords($records);
+    }
+
+    /**
+     * @param iterable<mixed, mixed> $records rows a records() closure, a paginator
+     *                                        or the query lane produced
      *
      * @return array<array-key, object|array<string, mixed>> keyed by record key
      */
@@ -253,18 +280,103 @@ trait HasTable
 
         foreach ($records as $sourceKey => $record) {
             if (is_array($record)) {
-                $record[ArrayRecord::getKeyName()] ??= $sourceKey;
-                $record[ArrayRecord::getKeyName()] = (string) $record[ArrayRecord::getKeyName()];
+                if (!self::isFieldKeyedRecord($record)) {
+                    throw new LogicException(sprintf('Array records of table [%s] must be keyed by field name; one arrived carrying a non-string key.', static::class));
+                }
 
-                $keyedRecords[$record[ArrayRecord::getKeyName()]] = $record;
+                $key = self::toRecordKey($record[ArrayRecord::getKeyName()] ?? $sourceKey)
+                    ?? throw new LogicException(sprintf('Record arrays must have a unique, printable [%s] entry for identification.', ArrayRecord::getKeyName()));
+
+                $record[ArrayRecord::getKeyName()] = $key;
+
+                $keyedRecords[$key] = $record;
 
                 continue;
+            }
+
+            if (!is_object($record)) {
+                throw new LogicException(sprintf('Records of table [%s] must be objects or field-keyed arrays, got %s.', static::class, get_debug_type($record)));
             }
 
             $keyedRecords[$this->getTableRecordKey($record)] = $record;
         }
 
+        $this->fillTableAggregateValues(array_map(static fn (int|string $key): string => (string) $key, array_keys($keyedRecords)));
+
         return $keyedRecords;
+    }
+
+    /**
+     * An array record is a field-keyed map — that is what every column read and
+     * the `__key` entry rely on, so an array carrying any other key is not one.
+     *
+     * @param array<mixed, mixed> $record
+     *
+     * @phpstan-assert-if-true array<string, mixed> $record
+     */
+    private static function isFieldKeyedRecord(array $record): bool
+    {
+        return array_all(array_keys($record), static fn (int|string $field): bool => is_string($field));
+    }
+
+    /**
+     * One batched read per aggregate column, over the keys of the page just
+     * resolved, landing in the table's side store for the cells to read — so
+     * the page query stays a plain entity read. A no-op off the query lane,
+     * where there is no entity manager to batch against, and asked before the
+     * declared query is reached at all, since a records closure wins over one
+     * that must then stay unevaluated.
+     *
+     * @param list<string> $keys
+     */
+    protected function fillTableAggregateValues(array $keys): void
+    {
+        $table = $this->getTable();
+
+        if (!$table->hasQuery()) {
+            return;
+        }
+
+        $entityManager = $table->getQueryEntityManager();
+        $recordClass = $table->getRecordClass();
+
+        if ($entityManager === null || $recordClass === null || $keys === []) {
+            return;
+        }
+
+        foreach ($table->getColumns() as $column) {
+            $declaration = $column->getCellAggregateDeclaration();
+
+            if (!$declaration instanceof AggregateDeclaration) {
+                continue;
+            }
+
+            $scope = $declaration->scope;
+
+            $fetched = AggregateQuery::fetch($entityManager, $recordClass, new AggregateDeclaration(
+                function: $declaration->function,
+                relationshipPath: $declaration->relationshipPath,
+                column: $declaration->column,
+                scope: $scope instanceof Closure ? fn (QueryBuilder $query, string $alias): mixed => $column->evaluate($scope, ['alias' => $alias, 'query' => $query]) : null,
+                castToBool: $declaration->castToBool,
+            ), $keys);
+
+            $default = match (true) {
+                $declaration->castToBool => false,
+                $declaration->function === 'COUNT' => 0,
+                default => null,
+            };
+
+            $values = [];
+
+            foreach ($keys as $key) {
+                $value = $fetched[$key] ?? $default;
+
+                $values[$key] = $declaration->castToBool ? ((int) $value > 0) : $value;
+            }
+
+            $table->setAggregateValues($column->getName(), $values);
+        }
     }
 
     private function resolveQueryTableRecord(string $key): ?object
@@ -287,7 +399,7 @@ trait HasTable
         $rootAlias = $query->getRootAliases()[0]
             ?? throw new LogicException(sprintf('The query of table [%s] names no root alias to resolve a record against.', static::class));
 
-        $record = $query
+        $record = $this->applyFiltersToTableQuery($query, isResolvingRecord: true)
             ->andWhere(sprintf('%s.%s = :sylament_record_key', $rootAlias, $metadata->getSingleIdentifierFieldName()))
             ->setParameter('sylament_record_key', $key)
             ->getQuery()
@@ -323,16 +435,7 @@ trait HasTable
             throw new LogicException(sprintf('Object records must expose a readable non-blank identifier; [%s] has none set.', $record::class));
         }
 
-        $key = array_first($identifierValues);
-
-        if ($key instanceof Stringable) {
-            $key = (string) $key;
-        }
-
-        if (!is_scalar($key) || blank($key)) {
-            throw new LogicException(sprintf('The identifier of [%s] is not a printable value.', $record::class));
-        }
-
-        return (string) $key;
+        return self::toRecordKey(array_first($identifierValues))
+            ?? throw new LogicException(sprintf('The identifier of [%s] is not a printable value.', $record::class));
     }
 }

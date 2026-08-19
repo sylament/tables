@@ -186,6 +186,26 @@ it('paginates entities, not joined rows, under a fetch join', function (): void 
         ->and($paginator->getTotalRecordCount())->toBe(3);
 });
 
+it('pages a to-one fetch join as plain rows, the relation still hydrated', function (): void {
+    $entityManager = pagedArtists();
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()
+            ->select('song')
+            ->from(Song::class, 'song')
+            ->leftJoin('song.artist', 'artist')
+            ->addSelect('artist'))
+        ->paginated([2, 5]));
+
+    $paginator = $host->getTableRecords();
+    $records = $paginator->getRecords();
+
+    expect($records)->toHaveCount(2)
+        ->and(array_keys($records))->toBe([1, 2])
+        ->and($records[1])->toBeInstanceOf(Song::class)
+        ->and($records[1]->getArtist()?->getName())->toBe('Alpha')
+        ->and($paginator->getTotalRecordCount())->toBe(9);
+});
+
 it('returns a plain keyed array when pagination is off', function (): void {
     $entityManager = pagedSongs(3);
     $host = new TableHost(fn (Table $table): Table => $table

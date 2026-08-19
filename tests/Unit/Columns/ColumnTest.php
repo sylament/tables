@@ -2,12 +2,52 @@
 
 declare(strict_types=1);
 
+use Doctrine\ORM\EntityManager;
 use Sylament\Tables\Columns\Column;
 use Sylament\Tables\Columns\TextColumn;
 use Sylament\Tables\Table;
 use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
+use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Artist as DoctrineArtist;
+use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Genre;
+use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Song as DoctrineSong;
+use Sylament\Tables\Tests\Fixtures\Doctrine\EntityManagerFactory;
 use Sylament\Tables\Tests\Fixtures\Records\Artist;
 use Sylament\Tables\Tests\Fixtures\Records\Song;
+
+/**
+ * An unmanaged song carrying the named genres, so a to-many path has a subject
+ * that needs no database behind it.
+ */
+function songWithGenres(string ...$names): DoctrineSong
+{
+    $song = new DoctrineSong(1, 'Airbag', 10);
+
+    foreach ($names as $index => $name) {
+        $song->getGenres()->add(new Genre($index + 1, $name));
+    }
+
+    return $song;
+}
+
+/**
+ * Two seeded songs — one on an artist that owns it, one with no artist at all —
+ * so a path crossing a collection has a populated row and a row whose walk
+ * stops before the collection.
+ */
+function songLibrary(): EntityManager
+{
+    $entityManager = EntityManagerFactory::create();
+    $radiohead = new DoctrineArtist(1, 'Radiohead');
+
+    EntityManagerFactory::seed(
+        $entityManager,
+        $radiohead,
+        new DoctrineSong(1, 'Alpha', 10, $radiohead),
+        new DoctrineSong(2, 'Orphan', 20),
+    );
+
+    return $entityManager;
+}
 
 it('requires a name on make', function (): void {
     expect(fn (): Column => Column::make())
@@ -49,6 +89,74 @@ it('returns null for an unreadable path instead of throwing', function (): void 
     expect(Column::make('missing')->record(new Song('Airbag', 'OK Computer'))->getState())->toBeNull()
         ->and(Column::make('missing')->record(['title' => 'x'])->getState())->toBeNull()
         ->and(Column::make('title')->getState())->toBeNull();
+});
+
+it('flattens a to-many path into a list', function (): void {
+    expect(Column::make('genres.name')->record(songWithGenres('Rock', 'Pop'))->getState())->toBe(['Rock', 'Pop']);
+});
+
+it('keeps a single-element to-many result a list', function (): void {
+    expect(Column::make('genres.name')->record(songWithGenres('Rock'))->getState())->toBe(['Rock']);
+});
+
+it('drops blank values from a flattened list', function (): void {
+    expect(Column::make('genres.name')->record(songWithGenres('', 'Pop'))->getState())->toBe(['Pop']);
+});
+
+it('dedupes a flattened list only once distinctList is set', function (): void {
+    $record = songWithGenres('Rock', 'Rock', 'Pop');
+
+    expect(Column::make('genres.name')->record($record)->getState())->toBe(['Rock', 'Rock', 'Pop'])
+        ->and(Column::make('genres.name')->distinctList()->record($record)->getState())->toBe(['Rock', 'Pop'])
+        ->and(Column::make('genres.name')->distinctList(fn (): bool => true)->record($record)->getState())->toBe(['Rock', 'Pop'])
+        ->and(Column::make('genres.name')->distinctList(false)->record($record)->getState())->toBe(['Rock', 'Rock', 'Pop']);
+});
+
+it('yields null when a to-many path collects nothing', function (): void {
+    expect(Column::make('genres.name')->record(songWithGenres())->getState())->toBeNull();
+});
+
+it('reads a to-one chain unchanged, blank leaf included', function (): void {
+    expect(Column::make('artist.name')->record(new Song('Airbag', 'OK Computer', new Artist('')))->getState())->toBe('')
+        ->and(Column::make('artist.name')->record(new Song('Airbag', 'OK Computer'))->getState())->toBeNull();
+});
+
+it('leaves a dotless collection name to the raw record read', function (): void {
+    $record = songWithGenres('Rock', 'Pop');
+
+    expect(Column::make('genres')->record($record)->getState())->toBe($record->getGenres());
+});
+
+it('flattens a path that ends at a collection into its items', function (): void {
+    $entityManager = songLibrary();
+
+    $state = Column::make('artist.songs')->record($entityManager->getReference(DoctrineSong::class, 1))->getState();
+
+    expect($state)->toBeArray()
+        ->and($state)->toHaveCount(1)
+        ->and($state[0])->toBeInstanceOf(DoctrineSong::class);
+});
+
+it('keeps the to-many shape on a row whose walk reaches no collection', function (): void {
+    $entityManager = songLibrary();
+    $table = new TableHost(fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(DoctrineSong::class, 'song')))->getTable();
+    $stateOf = fn (int $id): mixed => Column::make('artist.songs.title')
+        ->table($table)
+        ->record($entityManager->getReference(DoctrineSong::class, $id))
+        ->getState();
+
+    expect($stateOf(2))->toBeNull()
+        ->and($stateOf(1))->toBe(['Alpha']);
+});
+
+it('falls back to value-derived multiplicity on the records lane', function (): void {
+    $record = songWithGenres('Rock', 'Pop');
+    $table = new TableHost(fn (Table $table): Table => $table->records(fn (): array => [$record]))->getTable();
+
+    expect($table->getQueryEntityManager())->toBeNull()
+        ->and($table->getRecordClass())->toBeNull()
+        ->and(Column::make('genres.name')->table($table)->record($record)->getState())->toBe(['Rock', 'Pop']);
 });
 
 it('lets state() override the record read and injects the record', function (): void {

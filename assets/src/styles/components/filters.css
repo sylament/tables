@@ -1,0 +1,54 @@
+.sy-ta-filters {
+    @apply grid gap-y-4;
+
+    & .sy-ta-filters-header {
+        @apply flex items-center justify-between gap-x-3;
+    }
+
+    & .sy-ta-filters-heading {
+        @apply text-base leading-6 font-semibold text-gray-950 dark:text-white;
+    }
+
+    & .sy-ta-filters-actions-ctn {
+        @apply flex flex-wrap items-center gap-3;
+    }
+}
+
+.sy-ta-filters-dropdown {
+    & > .sy-dropdown-panel {
+        width: var(--sy-dropdown-width, 20rem);
+    }
+
+    & .sy-ta-filters {
+        @apply p-6;
+    }
+}
+
+.sy-ta-filters-trigger {
+    @apply relative inline-flex;
+
+    /* Vendor's `fi-icon-btn-badge-ctn` is a child of the icon button, so its
+       `start-full top-1` anchors against the painted 2.25rem box. Here the badge is a
+       sibling and this container is the button's *margin* box, which `.sy-icon-btn`'s
+       `-m-2` insets 0.5rem inside that box on every edge — hence `ms-2` and `-top-1`
+       for the same two anchor points. */
+    & > .sy-ta-filters-trigger-badge-ctn {
+        @apply pointer-events-none absolute -top-1 start-full z-[1] ms-2 flex w-max -translate-x-1/2 -translate-y-1/2 rounded-md bg-white rtl:translate-x-1/2 dark:bg-gray-900;
+    }
+}
+
+.sy-ta-filter-indicators {
+    @apply flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3 sm:px-6 dark:border-white/10 dark:bg-white/5;
+
+    & .sy-ta-filter-indicators-ctn {
+        @apply flex flex-wrap items-center gap-x-3 gap-y-2;
+    }
+
+    & .sy-ta-filter-indicators-label {
+        @apply text-sm font-medium text-gray-700 dark:text-gray-200;
+    }
+
+    & .sy-ta-filter-indicators-badges-ctn {
+        @apply flex flex-wrap items-center gap-1.5;
+    }
+}

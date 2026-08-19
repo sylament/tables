@@ -73,6 +73,10 @@
         & .sy-ta-col {
             @apply flex w-full justify-start text-start;
         }
+
+        &:has(.sy-ta-actions) {
+            @apply px-3 py-4 whitespace-nowrap first-of-type:ps-4 last-of-type:pe-4 sm:first-of-type:ps-6 sm:last-of-type:pe-6;
+        }
     }
 
     & .sy-ta-actions {
@@ -84,7 +88,7 @@
     }
 
     & .sy-ta-empty-state {
-        @apply px-6 py-12;
+        @apply border-t border-gray-200 px-6 py-12 dark:border-white/10;
 
         & .sy-ta-empty-state-content {
             @apply mx-auto grid max-w-lg justify-items-center text-center;

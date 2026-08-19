@@ -10,6 +10,7 @@ use Sylament\Support\Components\Concerns\HasAlignment;
 use Sylament\Support\Components\ViewComponent;
 use Sylament\Support\Evaluation\ClosureParameter;
 use Sylament\Tables\Columns\Concerns\BelongsToTable;
+use Sylament\Tables\Columns\Concerns\CanAggregateRelatedRecords;
 use Sylament\Tables\Columns\Concerns\CanBeSearchable;
 use Sylament\Tables\Columns\Concerns\CanBeSortable;
 use Sylament\Tables\Columns\Concerns\HasCellState;
@@ -24,6 +25,7 @@ class Column extends ViewComponent
 {
     use BelongsToTable;
     use CanAccessProperties;
+    use CanAggregateRelatedRecords;
     use CanBeSearchable;
     use CanBeSortable;
     use HasAlignment;

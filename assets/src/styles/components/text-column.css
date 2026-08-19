@@ -25,8 +25,13 @@
         }
     }
 
-    &.sy-wrapped:not(.sy-ta-text-has-badges) {
+    &.sy-wrapped {
         @apply whitespace-normal;
+
+        /* Badge content should not wrap, but descriptions above and below badges should. */
+        & .sy-badge {
+            @apply whitespace-nowrap;
+        }
     }
 
     &.sy-align-center {

@@ -104,7 +104,7 @@ trait CanSortRecords
             if ($defaultSortColumn instanceof Column) {
                 $defaultSortColumn->applySort($query, $sortDirection);
             } else {
-                $query->addOrderBy(ColumnPathResolver::resolve($query, $defaultSort), $sortDirection);
+                $query->addOrderBy(ColumnPathResolver::resolveOrderable($query, $defaultSort), $sortDirection);
             }
         }
 
@@ -145,13 +145,6 @@ trait CanSortRecords
                 $sortedPath = explode(' ', $part, 2)[0];
 
                 if ($sortedPath === $qualifiedKey) {
-                    return $query;
-                }
-
-                $dotPosition = mb_strrpos($sortedPath, '.');
-                $sortedField = $dotPosition === false ? $sortedPath : mb_substr($sortedPath, $dotPosition + 1);
-
-                if ($sortedField === $identifierField) {
                     return $query;
                 }
             }

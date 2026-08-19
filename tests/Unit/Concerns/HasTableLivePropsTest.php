@@ -26,9 +26,11 @@ it('declares the table state as LiveProps with the intended writability, hooks a
     'page' => ['tablePage', false, null, null],
     'per page' => ['tableRecordsPerPage', true, 'updatedTableRecordsPerPage', 'dehydrateTableRecordsPerPage'],
     'search' => ['tableSearch', true, 'updatedTableSearch', 'dehydrateTableSearch'],
+    'filters' => ['tableFilters', true, 'updatedTableFilters', null],
+    'deferred filters' => ['tableDeferredFilters', true, null, null],
 ]);
 
-it('exposes sortTable and gotoTablePage as live actions with live args', function (string $method, array $argNames): void {
+it('exposes the table state mutations as live actions with live args', function (string $method, array $argNames): void {
     $reflection = new ReflectionMethod(TableHost::class, $method);
 
     expect($reflection->getAttributes(LiveAction::class))->toHaveCount(1);
@@ -40,4 +42,9 @@ it('exposes sortTable and gotoTablePage as live actions with live args', functio
 })->with([
     'sortTable' => ['sortTable', ['column', 'direction']],
     'gotoTablePage' => ['gotoTablePage', ['page']],
+    'applyTableFilters' => ['applyTableFilters', []],
+    'removeTableFilter' => ['removeTableFilter', ['filterName', 'field']],
+    'removeTableFilters' => ['removeTableFilters', []],
+    'resetTableFiltersForm' => ['resetTableFiltersForm', []],
+    'resetTableSearch' => ['resetTableSearch', []],
 ]);

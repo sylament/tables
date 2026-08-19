@@ -23,6 +23,12 @@ class SylamentTablesBundle extends SylamentBundle
             ->autowire()
             ->autoconfigure();
 
+        $services
+            ->load(__NAMESPACE__ . '\\Filters\\', __DIR__ . '/Filters/*.php')
+            ->exclude([__DIR__ . '/Filters/FilterIndicator.php'])
+            ->autowire()
+            ->autoconfigure();
+
         // `ColorManager` resolves a policy from the service container by class-string, and a
         // private service is not reachable through `Container::get()`, so both globs stay public.
         $services

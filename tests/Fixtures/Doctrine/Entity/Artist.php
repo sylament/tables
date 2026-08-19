@@ -22,7 +22,11 @@ class Artist
         #[ORM\Column]
         private int $id,
         #[ORM\Column]
-        private string $name
+        private string $name,
+        #[ORM\ManyToOne(targetEntity: Label::class)]
+        private ?Label $label = null,
+        #[ORM\Embedded(class: Address::class)]
+        private Address $address = new Address()
     ) {
         $this->songs = new ArrayCollection();
     }
@@ -35,6 +39,16 @@ class Artist
     public function getName(): string
     {
         return $this->name;
+    }
+
+    public function getLabel(): ?Label
+    {
+        return $this->label;
+    }
+
+    public function getAddress(): Address
+    {
+        return $this->address;
     }
 
     /**
