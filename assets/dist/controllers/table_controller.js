@@ -1,0 +1,249 @@
+import { Controller } from "@hotwired/stimulus";
+import { resolveLiveHost } from "../utils/live_host.js";
+const SELECTED_MODEL = "selectedTableRecords";
+const DESELECTED_MODEL = "deselectedTableRecords";
+const TRACKING_MODEL = "isTrackingDeselectedTableRecords";
+const SELECT_ALL_ACTION = "selectAllTableRecords";
+const RECORD_CHECKBOX_SELECTOR = ".sy-ta-record-checkbox";
+const BULK_ONLY_SELECTOR = "[data-sy-table-bulk-only]";
+const COUNT_PLACEHOLDER = ":count";
+class table_controller_default extends Controller {
+  static targets = [
+    "recordCheckbox",
+    "pageCheckbox",
+    "banner",
+    "count",
+    "selectAll",
+    "deselectAll"
+  ];
+  static values = {
+    canTrack: { type: Boolean, default: false },
+    pageOnly: { type: Boolean, default: false },
+    allSelectableCount: Number,
+    countOne: String,
+    countMany: String
+  };
+  #component = null;
+  #unsubscribe = null;
+  #clickController = null;
+  #lastChecked = null;
+  #generation = 0;
+  async connect() {
+    const generation = ++this.#generation;
+    let component;
+    try {
+      component = await resolveLiveHost(this.element);
+    } catch {
+      return;
+    }
+    if (generation !== this.#generation) {
+      return;
+    }
+    this.#component = component;
+    const onRender = () => this.#repaint();
+    component.on("render:finished", onRender);
+    this.#unsubscribe = () => component.off("render:finished", onRender);
+    this.#watchShiftClicks();
+    this.#repaint();
+  }
+  disconnect() {
+    this.#generation++;
+    this.#unsubscribe?.();
+    this.#unsubscribe = null;
+    this.#clickController?.abort();
+    this.#clickController = null;
+    this.#component = null;
+    this.#lastChecked = null;
+  }
+  /** The ceiling is re-stamped by every morph, and the select-all link's visibility rides on it. */
+  allSelectableCountValueChanged() {
+    this.#repaint();
+  }
+  toggleRecord(event) {
+    const checkbox = event.target;
+    if (!(checkbox instanceof HTMLInputElement)) {
+      return;
+    }
+    const state = this.#state();
+    if (this.#isSelected(state, checkbox.value)) {
+      this.#deselectRecords(state, [checkbox.value]);
+    } else {
+      this.#selectRecords(state, [checkbox.value]);
+    }
+    this.#push(state);
+    this.#repaint();
+  }
+  togglePage() {
+    const state = this.#state();
+    const keys = this.#pageKeys();
+    if (this.#areSelected(state, keys)) {
+      this.#deselectRecords(state, keys);
+    } else {
+      this.#selectRecords(state, keys);
+    }
+    this.#push(state);
+    this.#repaint();
+  }
+  selectAll() {
+    if (this.canTrackValue && !this.pageOnlyValue) {
+      this.#push({ selected: /* @__PURE__ */ new Set(), deselected: /* @__PURE__ */ new Set(), tracking: true });
+      this.#repaint();
+      return;
+    }
+    if (this.pageOnlyValue) {
+      const state = this.#state();
+      this.#selectRecords(state, this.#pageKeys());
+      this.#push(state);
+      this.#repaint();
+      return;
+    }
+    this.#component?.action(SELECT_ALL_ACTION);
+  }
+  deselectAll() {
+    this.#push({ selected: /* @__PURE__ */ new Set(), deselected: /* @__PURE__ */ new Set(), tracking: false });
+    this.#repaint();
+  }
+  #state() {
+    const component = this.#component;
+    if (component === null) {
+      return { selected: /* @__PURE__ */ new Set(), deselected: /* @__PURE__ */ new Set(), tracking: false };
+    }
+    return {
+      selected: new Set(toKeys(component.getData(SELECTED_MODEL))),
+      deselected: new Set(toKeys(component.getData(DESELECTED_MODEL))),
+      tracking: component.getData(TRACKING_MODEL) === true
+    };
+  }
+  #push(next) {
+    const component = this.#component;
+    if (component === null) {
+      return;
+    }
+    component.set(TRACKING_MODEL, next.tracking, false);
+    component.set(SELECTED_MODEL, [...next.selected], false);
+    component.set(DESELECTED_MODEL, [...next.deselected], false);
+  }
+  #selectRecords(state, keys) {
+    for (const key of keys) {
+      if (state.tracking) {
+        state.deselected.delete(key);
+      } else {
+        state.selected.add(key);
+      }
+    }
+  }
+  #deselectRecords(state, keys) {
+    for (const key of keys) {
+      if (state.tracking) {
+        state.deselected.add(key);
+      } else {
+        state.selected.delete(key);
+      }
+    }
+  }
+  #isSelected(state, key) {
+    return state.tracking ? !state.deselected.has(key) : state.selected.has(key);
+  }
+  /** Filament's `areRecordsSelected`: no keys reads as selected. */
+  #areSelected(state, keys) {
+    return keys.every((key) => this.#isSelected(state, key));
+  }
+  #pageKeys() {
+    return this.recordCheckboxTargets.map((checkbox) => checkbox.value);
+  }
+  #selectedCount(state) {
+    if (!state.tracking) {
+      return state.selected.size;
+    }
+    if (this.hasAllSelectableCountValue) {
+      return Math.max(this.allSelectableCountValue - state.deselected.size, 0);
+    }
+    return this.#pageKeys().filter((key) => this.#isSelected(state, key)).length;
+  }
+  #canSelectAll(state) {
+    if (this.pageOnlyValue) {
+      return !this.#areSelected(state, this.#pageKeys());
+    }
+    if (!this.hasAllSelectableCountValue || this.allSelectableCountValue === 0) {
+      return false;
+    }
+    return this.allSelectableCountValue !== this.#selectedCount(state);
+  }
+  #countLabel(count) {
+    const template = count === 1 ? this.countOneValue : this.countManyValue;
+    return template.replaceAll(COUNT_PLACEHOLDER, new Intl.NumberFormat().format(count));
+  }
+  #repaint() {
+    if (this.#component === null) {
+      return;
+    }
+    const state = this.#state();
+    for (const checkbox of this.recordCheckboxTargets) {
+      checkbox.checked = this.#isSelected(state, checkbox.value);
+    }
+    if (this.hasPageCheckboxTarget) {
+      const keys = this.#pageKeys();
+      const selectedOnPage = keys.filter((key) => this.#isSelected(state, key)).length;
+      this.pageCheckboxTarget.checked = keys.length > 0 && selectedOnPage === keys.length;
+      this.pageCheckboxTarget.indeterminate = selectedOnPage > 0 && selectedOnPage < keys.length;
+    }
+    const count = this.#selectedCount(state);
+    if (this.hasBannerTarget) {
+      this.bannerTarget.hidden = count === 0;
+    }
+    if (this.hasCountTarget) {
+      this.countTarget.textContent = this.#countLabel(count);
+    }
+    if (this.hasSelectAllTarget) {
+      this.selectAllTarget.hidden = !this.#canSelectAll(state);
+    }
+    for (const element of this.element.querySelectorAll(BULK_ONLY_SELECTOR)) {
+      element.hidden = count === 0;
+    }
+  }
+  #watchShiftClicks() {
+    this.#clickController?.abort();
+    this.#clickController = new AbortController();
+    this.element.addEventListener(
+      "click",
+      (event) => {
+        const checkbox = event.target;
+        if (checkbox instanceof HTMLInputElement && checkbox.matches(RECORD_CHECKBOX_SELECTOR)) {
+          this.#handleCheckboxClick(event, checkbox);
+        }
+      },
+      { signal: this.#clickController.signal }
+    );
+  }
+  /** The shift range excludes the clicked box — `toggleRecord` owns it, on the `change` that follows. */
+  #handleCheckboxClick(event, checkbox) {
+    const last = this.#lastChecked;
+    this.#lastChecked = checkbox;
+    if (last === null || !(event instanceof MouseEvent) || !event.shiftKey) {
+      return;
+    }
+    const checkboxes = this.recordCheckboxTargets;
+    const start = checkboxes.indexOf(last);
+    const end = checkboxes.indexOf(checkbox);
+    if (start === -1 || end === -1) {
+      return;
+    }
+    const [from, to] = [start, end].sort((a, b) => a - b);
+    const keys = checkboxes.slice(from, to + 1).filter((element) => element !== checkbox).map((element) => element.value);
+    const state = this.#state();
+    if (checkbox.checked) {
+      this.#selectRecords(state, keys);
+    } else {
+      this.#deselectRecords(state, keys);
+    }
+    this.#push(state);
+    this.#repaint();
+  }
+}
+function toKeys(value) {
+  return Array.isArray(value) ? value.filter((key) => typeof key === "string") : [];
+}
+export {
+  table_controller_default as default
+};
+//# sourceMappingURL=table_controller.js.map

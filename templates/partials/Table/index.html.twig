@@ -14,18 +14,64 @@
 {% set filterIndicators = component.getFilterIndicators %}
 {% set removableIndicatorCount = filterIndicators|filter(carrier => carrier.indicator.isRemovable)|length %}
 
+{% set headerActions = component.getHeaderActions|filter(action => action.isVisible) %}
+{% set toolbarActions = component.getToolbarActions|filter(action => action.isVisible) %}
+{% set toolbarVisible = isSearchable or filtersTriggerVisible or headerActions is not empty or toolbarActions is not empty %}
+
 {% set recordActionsByKey = component.getVisibleRecordActionsByRecordKey %}
 {% set hasRecordActions = recordActionsByKey|filter(actions => actions is not empty)|length > 0 %}
-{% set actionsLeading = hasRecordActions and component.getRecordActionsPosition.name in ['BeforeCells', 'BeforeColumns'] %}
-{% set actionsTrailing = hasRecordActions and component.getRecordActionsPosition.name in ['AfterColumns', 'AfterCells'] %}
+{% set recordActionsPosition = component.getRecordActionsPosition.name %}
+{% set actionsBeforeCells = hasRecordActions and recordActionsPosition == 'BeforeCells' %}
+{% set actionsBeforeColumns = hasRecordActions and recordActionsPosition == 'BeforeColumns' %}
+{% set actionsAfterColumns = hasRecordActions and recordActionsPosition == 'AfterColumns' %}
+{% set actionsAfterCells = hasRecordActions and recordActionsPosition == 'AfterCells' %}
+
+{% set isSelectionEnabled = component.isSelectionEnabled %}
+{% set hasSelection = isSelectionEnabled and component.getLiveComponent.hasSelectedTableRecords %}
+{% set checkboxLeading = isSelectionEnabled and component.getRecordCheckboxPosition.name == 'BeforeCells' %}
+{% set checkboxTrailing = isSelectionEnabled and component.getRecordCheckboxPosition.name == 'AfterCells' %}
+{% set allSelectableCount = isSelectionEnabled ? component.getLiveComponent.getAllSelectableTableRecordsCount : null %}
 
 {% set emptyStateIcon = component.getEmptyStateIcon %}
 {% set emptyStateDescription = component.getEmptyStateDescription %}
 
-<div class="sy sy-ta">
+<div {{ attrs({
+    class: 'sy sy-ta',
+}, isSelectionEnabled ? stimulus_controller('sylament--tables--table', {
+    canTrack: component.canTrackDeselectedRecords,
+    pageOnly: component.selectsCurrentPageOnly,
+    allSelectableCount: allSelectableCount,
+    countOne: '1 record selected',
+    countMany: ':count records selected',
+}) : null) }}>
     <div class="sy-ta-ctn">
-        {% if isSearchable or filtersTriggerVisible %}
+        {% if toolbarVisible %}
             <div class="sy-ta-header-toolbar">
+                {% if headerActions is not empty or toolbarActions is not empty %}
+                    <div class="sy-ta-header-toolbar-actions">
+                        {# reorder trigger slot — M4 · 3 #}
+
+                        {# Header actions first, then toolbar actions: Filament's start-group order,
+                           walked as one list because a bulk-only member of either wraps the same way. #}
+                        {% for action in headerActions|merge(toolbarActions) %}
+                            {% set isBulkOnly = action.isBulk is defined
+                                ? action.isBulk
+                                : (action.getExtraDropdownAttributes['data-sy-table-bulk-only'] ?? false) %}
+
+                            {% if isBulkOnly %}
+                                <span {{ attrs({
+                                    'data-sy-table-bulk-only': true,
+                                    hidden: not hasSelection,
+                                }) }}>{{ renderComponent(action) }}</span>
+                            {% else %}
+                                {{ renderComponent(action) }}
+                            {% endif %}
+                        {% endfor %}
+
+                        {# grouping selector slot — M4 · 6 #}
+                    </div>
+                {% endif %}
+
                 <div class="sy-ta-header-toolbar-end">
                     {% if isSearchable %}
                         <label class="sy-ta-search-field">
@@ -86,6 +132,8 @@
                             </twig:block>
                         </twig:SylamentSupport:Dropdown>
                     {% endif %}
+
+                    {# column manager slot — M4 · 5 #}
                 </div>
             </div>
         {% endif %}
@@ -132,6 +180,37 @@
             </div>
         {% endif %}
 
+        {% if isSelectionEnabled %}
+            <div {{ attrs({
+                class: 'sy-ta-selection-indicator',
+                role: 'status',
+                'aria-live': 'polite',
+                'aria-atomic': 'true',
+                hidden: not hasSelection,
+            }, stimulus_target('sylament--tables--table', 'banner')) }}>
+                <div>
+                    <span {{ attrs(stimulus_target('sylament--tables--table', 'count')) }}></span>
+                </div>
+
+                <div class="sy-ta-selection-indicator-actions-ctn">
+                    <twig:SylamentSupport:Link
+                        tag="button"
+                        color="primary"
+                        :hidden="true"
+                        {{ ...stimulus_target('sylament--tables--table', 'selectAll') }}
+                        {{ ...stimulus_action('sylament--tables--table', 'selectAll', 'click') }}
+                    >Select all{{ allSelectableCount is not null ? ' ' ~ allSelectableCount : '' }}</twig:SylamentSupport:Link>
+
+                    <twig:SylamentSupport:Link
+                        tag="button"
+                        color="danger"
+                        {{ ...stimulus_target('sylament--tables--table', 'deselectAll') }}
+                        {{ ...stimulus_action('sylament--tables--table', 'deselectAll', 'click') }}
+                    >Deselect all</twig:SylamentSupport:Link>
+                </div>
+            </div>
+        {% endif %}
+
         {% if records is empty %}
             <div class="sy-ta-empty-state" role="status">
                 <div class="sy-ta-empty-state-content">
@@ -149,12 +228,24 @@
                 </div>
             </div>
         {% else %}
+            {% set actionsHeaderCell %}<th scope="col" aria-label="Actions" class="sy-ta-actions-header-cell sy-ta-empty-header-cell"></th>{% endset %}
+
+            {% set selectionHeaderCell %}
+                <th scope="col" class="sy-ta-selection-cell">
+                    <input {{ attrs({
+                        type: 'checkbox',
+                        class: 'sy-checkbox sy-ta-page-checkbox',
+                        'aria-label': 'Select/deselect all records on this page for bulk actions.',
+                    }, stimulus_target('sylament--tables--table', 'pageCheckbox'), stimulus_action('sylament--tables--table', 'togglePage', 'change')) }}>
+                </th>
+            {% endset %}
+
             <table class="sy-ta-table">
                 <thead>
                     <tr>
-                        {% if actionsLeading %}
-                            <th scope="col" aria-label="Actions" class="sy-ta-actions-header-cell sy-ta-empty-header-cell"></th>
-                        {% endif %}
+                        {% if actionsBeforeCells %}{{ actionsHeaderCell }}{% endif %}
+                        {% if checkboxLeading %}{{ selectionHeaderCell }}{% endif %}
+                        {% if actionsBeforeColumns %}{{ actionsHeaderCell }}{% endif %}
                         {% for column in columns %}
                             {% set columnName = column.getName %}
                             {% set isColumnSortable = column.isSortable %}
@@ -187,23 +278,41 @@
                                 {% endif %}
                             </th>
                         {% endfor %}
-                        {% if actionsTrailing %}
-                            <th scope="col" aria-label="Actions" class="sy-ta-actions-header-cell sy-ta-empty-header-cell"></th>
-                        {% endif %}
+                        {% if actionsAfterColumns %}{{ actionsHeaderCell }}{% endif %}
+                        {% if checkboxTrailing %}{{ selectionHeaderCell }}{% endif %}
+                        {% if actionsAfterCells %}{{ actionsHeaderCell }}{% endif %}
                     </tr>
                 </thead>
                 <tbody>
                     {% for recordKey, record in records %}
+                        {% set actionsCell %}{% if hasRecordActions %}
+                            <td class="sy-ta-cell">
+                                <div class="sy-ta-actions">
+                                    {% for action in recordActionsByKey[recordKey] ?? [] %}
+                                        {{ renderComponent(action) }}
+                                    {% endfor %}
+                                </div>
+                            </td>
+                        {% endif %}{% endset %}
+
+                        {% set selectionCell %}{% if isSelectionEnabled %}
+                            <td class="sy-ta-cell sy-ta-selection-cell">
+                                {% if component.isRecordSelectable(record) %}
+                                    <input {{ attrs({
+                                        type: 'checkbox',
+                                        class: 'sy-checkbox sy-ta-record-checkbox',
+                                        value: recordKey,
+                                        checked: component.getLiveComponent.isTableRecordSelected(recordKey),
+                                        'aria-label': 'Select/deselect record ' ~ recordKey ~ ' for bulk actions.',
+                                    }, stimulus_target('sylament--tables--table', 'recordCheckbox'), stimulus_action('sylament--tables--table', 'toggleRecord', 'change')) }}>
+                                {% endif %}
+                            </td>
+                        {% endif %}{% endset %}
+
                         <tr class="sy-ta-row" id="{{ hostId ~ '.table.records.' ~ recordKey }}">
-                            {% if actionsLeading %}
-                                <td class="sy-ta-cell">
-                                    <div class="sy-ta-actions">
-                                        {% for action in recordActionsByKey[recordKey] ?? [] %}
-                                            {{ renderComponent(action) }}
-                                        {% endfor %}
-                                    </div>
-                                </td>
-                            {% endif %}
+                            {% if actionsBeforeCells %}{{ actionsCell }}{% endif %}
+                            {% if checkboxLeading %}{{ selectionCell }}{% endif %}
+                            {% if actionsBeforeColumns %}{{ actionsCell }}{% endif %}
                             {% for column in columns %}
                                 {% do column.record(record) %}
                                 {% do column.recordKey(recordKey) %}
@@ -211,15 +320,9 @@
                                     <div class="sy-ta-col">{{ renderComponent(column) }}</div>
                                 </td>
                             {% endfor %}
-                            {% if actionsTrailing %}
-                                <td class="sy-ta-cell">
-                                    <div class="sy-ta-actions">
-                                        {% for action in recordActionsByKey[recordKey] ?? [] %}
-                                            {{ renderComponent(action) }}
-                                        {% endfor %}
-                                    </div>
-                                </td>
-                            {% endif %}
+                            {% if actionsAfterColumns %}{{ actionsCell }}{% endif %}
+                            {% if checkboxTrailing %}{{ selectionCell }}{% endif %}
+                            {% if actionsAfterCells %}{{ actionsCell }}{% endif %}
                         </tr>
                     {% endfor %}
                 </tbody>

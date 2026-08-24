@@ -192,6 +192,10 @@ trait HasFilters
 
     protected function handleTableFilterUpdates(): void
     {
+        if ($this->getTable()->shouldDeselectAllRecordsWhenFiltered()) {
+            $this->deselectAllTableRecords();
+        }
+
         $this->tablePage = 1;
         $this->flushCachedTableRecords();
     }

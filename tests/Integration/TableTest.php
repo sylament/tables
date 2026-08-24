@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Sylament\Tables\Tests\Integration;
 
 use Sylament\Actions\Action;
+use Sylament\Actions\BulkAction;
 use Sylament\Tables\Columns\TextColumn;
 use Sylament\Tables\Enums\RecordActionsPosition;
 use Sylament\Tables\Table;
@@ -57,6 +58,21 @@ it('nests the populated table in the documented DOM contract', function (): void
         ->and($crawler->filter('tr.sy-ta-row > td.sy-ta-cell')->count())->toBe(4)
         ->and($crawler->filter('td.sy-ta-cell > div.sy-ta-col > div.sy.sy-ta-text')->count())->toBe(4)
         ->and($crawler->filter('div.sy-ta-empty-state')->count())->toBe(0);
+});
+
+it('nests the selection chrome in the documented DOM contract', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->records(fn (): array => [new Song('Airbag', 'OK Computer', id: 1)])
+        ->columns([TextColumn::make('title')])
+        ->toolbarActions([BulkAction::make('archive')]));
+
+    $crawler = new Crawler(renderToHtml($host->getTable()));
+
+    expect($crawler->filter('div.sy.sy-ta[data-controller="sylament--tables--table"]')->count())->toBe(1)
+        ->and($crawler->filter('div.sy-ta-ctn > div.sy-ta-header-toolbar > div.sy-ta-header-toolbar-actions')->count())->toBe(1)
+        ->and($crawler->filter('div.sy-ta-ctn > div.sy-ta-selection-indicator > div.sy-ta-selection-indicator-actions-ctn')->count())->toBe(1)
+        ->and($crawler->filter('table.sy-ta-table > thead > tr > th.sy-ta-selection-cell')->count())->toBe(1)
+        ->and($crawler->filter('table.sy-ta-table > tbody > tr.sy-ta-row > td.sy-ta-cell.sy-ta-selection-cell > input.sy-checkbox.sy-ta-record-checkbox')->count())->toBe(1);
 });
 
 it('nests the empty state in the documented DOM contract', function (): void {

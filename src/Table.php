@@ -14,13 +14,16 @@ use Sylament\Tables\Table\Concerns\CanSearchRecords;
 use Sylament\Tables\Table\Concerns\CanSortRecords;
 use Sylament\Tables\Table\Concerns\HasActions;
 use Sylament\Tables\Table\Concerns\HasAggregateValues;
+use Sylament\Tables\Table\Concerns\HasBulkActions;
 use Sylament\Tables\Table\Concerns\HasColumns;
 use Sylament\Tables\Table\Concerns\HasEmptyState;
 use Sylament\Tables\Table\Concerns\HasFilterIndicators;
 use Sylament\Tables\Table\Concerns\HasFilters;
+use Sylament\Tables\Table\Concerns\HasHeaderActions;
 use Sylament\Tables\Table\Concerns\HasQuery;
 use Sylament\Tables\Table\Concerns\HasRecordActions;
 use Sylament\Tables\Table\Concerns\HasRecords;
+use Sylament\Tables\Table\Concerns\HasToolbarActions;
 
 class Table extends ViewComponent
 {
@@ -30,13 +33,16 @@ class Table extends ViewComponent
     use CanSortRecords;
     use HasActions;
     use HasAggregateValues;
+    use HasBulkActions;
     use HasColumns;
     use HasEmptyState;
     use HasFilterIndicators;
     use HasFilters;
+    use HasHeaderActions;
     use HasQuery;
     use HasRecordActions;
     use HasRecords;
+    use HasToolbarActions;
 
     protected string $evaluationIdentifier = 'table';
 

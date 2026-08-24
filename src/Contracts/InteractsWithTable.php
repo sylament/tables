@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Sylament\Tables\Contracts;
 
+use Doctrine\ORM\QueryBuilder;
 use Sylament\Schemas\Schema;
 use Sylament\Support\Pagination\Paginator;
 use Sylament\Tables\Filters\Indicator;
@@ -53,4 +54,44 @@ interface InteractsWithTable
      * throws rather than answering.
      */
     public function getTableFiltersForm(): Schema;
+
+    /**
+     * Whether the record under `$key` is selected — tracking-aware, so it
+     * answers the deselection bag while the selection is inverted. Read by the
+     * partial to render each checkbox's `checked`.
+     */
+    public function isTableRecordSelected(string $key): bool;
+
+    /**
+     * Whether anything is selected at all. Read by the partial to stamp the
+     * server-side `hidden` on the selection banner and the bulk-only triggers.
+     */
+    public function hasSelectedTableRecords(): bool;
+
+    /**
+     * The selected records, re-derived server-side from the client's keys:
+     * hydrated records, or their keys alone under `fetchSelectedRecords(false)`.
+     * Read by a bulk action through this contract.
+     *
+     * @return list<object|array<string, mixed>>|list<string>
+     */
+    public function getSelectedTableRecords(bool $shouldFetchSelectedRecords = true): array;
+
+    /**
+     * The table's query narrowed to the selection, for a bulk action that
+     * writes without hydrating. Query lane only — a records() table throws.
+     */
+    public function getSelectedTableRecordsQuery(bool $shouldFetchSelectedRecords = true): QueryBuilder;
+
+    /**
+     * How many records the user could select in total, or null where the table
+     * carries no total. Read by the partial as the banner's ceiling.
+     */
+    public function getAllSelectableTableRecordsCount(): ?int;
+
+    /**
+     * Clears the selection server-side. Called by the filter and search hooks,
+     * and by a bulk action that deselects after completion.
+     */
+    public function deselectAllTableRecords(): void;
 }

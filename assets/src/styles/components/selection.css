@@ -1,0 +1,15 @@
+.sy-ta-selection-indicator {
+    @apply flex flex-col justify-between gap-y-1 border-b border-gray-200 bg-gray-50 px-3 py-2 sm:flex-row sm:items-center sm:px-6 sm:py-1.5 dark:border-white/10 dark:bg-white/5;
+
+    & > * {
+        @apply flex gap-x-3;
+    }
+
+    & > :nth-child(1) {
+        @apply text-sm leading-6 font-medium text-gray-700 dark:text-gray-200;
+    }
+
+    & > :nth-child(2) {
+        @apply ms-auto;
+    }
+}

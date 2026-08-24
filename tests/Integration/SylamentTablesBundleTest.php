@@ -17,6 +17,7 @@ use Sylament\Tables\Tests\Fixtures\Concerns\SchemaStateHost;
 use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
 use Sylament\Tables\Tests\Fixtures\Records\SongRepository;
 use Sylament\Tables\Twig\Extension\TableExtension;
+use Symfony\Component\AssetMapper\AssetMapperInterface;
 use Twig\Loader\FilesystemLoader;
 
 use function Sylament\Tables\Tests\renderToHtml;
@@ -93,4 +94,28 @@ it('builds filters and indicators through the container so their closures reach 
 
 it('keeps the filter indicator carrier out of the filters service glob', function (): void {
     expect($this::getContainer()->has(FilterIndicator::class))->toBeFalse();
+});
+
+it('maps the built assets directory into AssetMapper under @sylament/tables', function (): void {
+    // StimulusBundle's `ControllersMapGenerator` resolves a `symfony.controllers` entry by
+    // calling `getAssetFromSourcePath()` on the package directory plus the declared `main`,
+    // and throws when the path sits outside every registered one — so the prepend is what
+    // stands between the built controller and a consuming app.
+    $asset = $this::getContainer()->get(AssetMapperInterface::class)->getAssetFromSourcePath(
+        dirname(__DIR__, 2) . '/assets/dist/controllers/table_controller.js',
+    );
+
+    expect($asset)->not->toBeNull()
+        ->and($asset->logicalPath)->toBe('@sylament/tables/controllers/table_controller.js');
+});
+
+it('resolves the live-host helper the table controller imports', function (): void {
+    // The per-file build ships `utils/live_host.js` standalone beside the controller that
+    // imports it, so its logical path must resolve too or the browser 404s on the import.
+    $asset = $this::getContainer()->get(AssetMapperInterface::class)->getAssetFromSourcePath(
+        dirname(__DIR__, 2) . '/assets/dist/utils/live_host.js',
+    );
+
+    expect($asset)->not->toBeNull()
+        ->and($asset->logicalPath)->toBe('@sylament/tables/utils/live_host.js');
 });

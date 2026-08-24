@@ -51,4 +51,24 @@ class SylamentTablesBundle extends SylamentBundle
             ->autowire()
             ->tag('twig.extension');
     }
+
+    public function prependExtension(ContainerConfigurator $configurator, ContainerBuilder $container): void
+    {
+        $this->prependAssetMapper($container);
+    }
+
+    private function prependAssetMapper(ContainerBuilder $container): void
+    {
+        if (!$this->isAssetMapperAvailable($container)) {
+            return;
+        }
+
+        $container->prependExtensionConfig('framework', [
+            'asset_mapper' => [
+                'paths' => [
+                    __DIR__ . '/../assets/dist' => '@sylament/tables',
+                ],
+            ],
+        ]);
+    }
 }

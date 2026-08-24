@@ -11,6 +11,12 @@ use Doctrine\DBAL\Driver\Statement as StatementInterface;
 
 final class RecordingConnection extends AbstractConnectionMiddleware
 {
+    public const string BEGIN = 'BEGIN';
+
+    public const string COMMIT = 'COMMIT';
+
+    public const string ROLLBACK = 'ROLLBACK';
+
     public function __construct(
         ConnectionInterface $connection,
         private readonly RecordingMiddleware $recorder,
@@ -39,5 +45,33 @@ final class RecordingConnection extends AbstractConnectionMiddleware
         $this->recorder->record($sql);
 
         return parent::exec($sql);
+    }
+
+    /**
+     * The three transaction calls carry no SQL of their own — the driver speaks
+     * them natively — so they are recorded as markers instead, which is what
+     * lets a test read a BEGIN…COMMIT (or a ROLLBACK) out of the same statement
+     * list the queries land in. A nested transaction never reaches here: DBAL
+     * turns that into a savepoint, whose SQL flows through `exec()` above.
+     */
+    public function beginTransaction(): void
+    {
+        $this->recorder->record(self::BEGIN);
+
+        parent::beginTransaction();
+    }
+
+    public function commit(): void
+    {
+        $this->recorder->record(self::COMMIT);
+
+        parent::commit();
+    }
+
+    public function rollBack(): void
+    {
+        $this->recorder->record(self::ROLLBACK);
+
+        parent::rollBack();
     }
 }

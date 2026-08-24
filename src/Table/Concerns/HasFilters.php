@@ -33,6 +33,8 @@ trait HasFilters
 
     protected bool|Closure $hasDeferredFilters = true;
 
+    protected bool|Closure $shouldDeselectAllRecordsWhenFiltered = true;
+
     /**
      * @param array<BaseFilter> $filters
      */
@@ -122,6 +124,23 @@ trait HasFilters
     public function hasDeferredFilters(): bool
     {
         return (bool) $this->evaluate($this->hasDeferredFilters);
+    }
+
+    public function deselectAllRecordsWhenFiltered(bool|Closure $condition = true): static
+    {
+        $this->shouldDeselectAllRecordsWhenFiltered = $condition;
+
+        return $this;
+    }
+
+    /**
+     * A filter setting read only by the selection: the host tails that clear it,
+     * the selected-records query's filter re-apply, and
+     * `canTrackDeselectedRecords()`.
+     */
+    public function shouldDeselectAllRecordsWhenFiltered(): bool
+    {
+        return (bool) $this->evaluate($this->shouldDeselectAllRecordsWhenFiltered);
     }
 
     public function filtersLayout(FiltersLayout|Closure|null $layout): static

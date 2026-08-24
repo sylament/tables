@@ -7,7 +7,7 @@ use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveArg;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
 
-it('declares the table state as LiveProps with the intended writability, hooks and wire bridges', function (string $property, bool $writable, ?string $onUpdated, ?string $dehydrateWith): void {
+it('declares the table state as LiveProps with the intended writability, hooks and wire bridges', function (string $property, bool $writable, ?string $onUpdated, ?string $dehydrateWith, bool $url, string $fieldName): void {
     $attributes = new ReflectionProperty(TableHost::class, $property)->getAttributes(LiveProp::class);
 
     expect($attributes)->toHaveCount(1);
@@ -16,18 +16,23 @@ it('declares the table state as LiveProps with the intended writability, hooks a
 
     expect($prop->isIdentityWritable())->toBe($writable)
         ->and($prop->onUpdated())->toBe($onUpdated)
-        ->and($prop->dehydrateMethod())->toBe($dehydrateWith);
+        ->and($prop->dehydrateMethod())->toBe($dehydrateWith)
+        ->and($prop->url())->toBe($url)
+        ->and($prop->calculateFieldName(new TableHost(), $property))->toBe($fieldName);
 
     foreach (array_filter([$onUpdated, $dehydrateWith]) as $method) {
         expect(method_exists(TableHost::class, $method))->toBeTrue();
     }
 })->with([
-    'sort' => ['tableSort', false, null, null],
-    'page' => ['tablePage', false, null, null],
-    'per page' => ['tableRecordsPerPage', true, 'updatedTableRecordsPerPage', 'dehydrateTableRecordsPerPage'],
-    'search' => ['tableSearch', true, 'updatedTableSearch', 'dehydrateTableSearch'],
-    'filters' => ['tableFilters', true, 'updatedTableFilters', null],
-    'deferred filters' => ['tableDeferredFilters', true, null, null],
+    'sort' => ['tableSort', false, null, null, false, 'tableSort'],
+    'page' => ['tablePage', false, null, null, false, 'tablePage'],
+    'per page' => ['tableRecordsPerPage', true, 'updatedTableRecordsPerPage', 'dehydrateTableRecordsPerPage', false, 'tableRecordsPerPage'],
+    'search' => ['tableSearch', true, 'updatedTableSearch', 'dehydrateTableSearch', false, 'tableSearch'],
+    'filters' => ['tableFilters', true, 'updatedTableFilters', null, false, 'tableFilters'],
+    'deferred filters' => ['tableDeferredFilters', true, null, null, false, 'tableDeferredFilters'],
+    'selected records' => ['selectedTableRecordKeys', true, null, null, false, 'selectedTableRecords'],
+    'deselected records' => ['deselectedTableRecords', true, null, null, false, 'deselectedTableRecords'],
+    'deselect tracking' => ['isTrackingDeselectedTableRecords', true, null, null, false, 'isTrackingDeselectedTableRecords'],
 ]);
 
 it('exposes the table state mutations as live actions with live args', function (string $method, array $argNames): void {
@@ -47,4 +52,5 @@ it('exposes the table state mutations as live actions with live args', function 
     'removeTableFilters' => ['removeTableFilters', []],
     'resetTableFiltersForm' => ['resetTableFiltersForm', []],
     'resetTableSearch' => ['resetTableSearch', []],
+    'selectAllTableRecords' => ['selectAllTableRecords', []],
 ]);

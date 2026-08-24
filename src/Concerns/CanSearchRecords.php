@@ -31,13 +31,25 @@ trait CanSearchRecords
             return;
         }
 
+        if ($this->getTable()->shouldDeselectAllRecordsWhenFiltered()) {
+            $this->deselectAllTableRecords();
+        }
+
         $this->tablePage = 1;
         $this->flushCachedTableRecords();
     }
 
+    /**
+     * The clear button's channel to the same state change the prop's `onUpdated`
+     * hook handles, so it deselects on the same terms.
+     */
     #[LiveAction]
     public function resetTableSearch(): void
     {
+        if ($this->getTable()->shouldDeselectAllRecordsWhenFiltered()) {
+            $this->deselectAllTableRecords();
+        }
+
         $this->tableSearch = '';
         $this->tablePage = 1;
         $this->flushCachedTableRecords();

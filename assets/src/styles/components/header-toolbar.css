@@ -5,6 +5,10 @@
         @apply flex min-h-9 items-center gap-x-4;
     }
 
+    & > .sy-ta-header-toolbar-actions {
+        @apply max-w-full shrink-0;
+    }
+
     & > .sy-ta-header-toolbar-end {
         @apply ms-auto;
     }

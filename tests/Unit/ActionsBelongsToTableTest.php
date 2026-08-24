@@ -6,6 +6,7 @@ namespace Sylament\Tables\Tests\Unit;
 
 use Sylament\Actions\Action;
 use Sylament\Actions\ActionGroup;
+use Sylament\Actions\BulkAction;
 use Sylament\Tables\Table;
 use Sylament\Tables\Tests\Fixtures\Concerns\TableActionsHost;
 use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
@@ -55,4 +56,25 @@ it('resolves the live component through the bound table', function (): void {
     $action = Action::make('edit')->table(Table::make($host));
 
     expect($action->getLiveComponent())->toBe($host);
+});
+
+it('emits the bulk flag beside the table flag for a bulk table action', function (): void {
+    $action = BulkAction::make('delete')->table(Table::make(new TableHost()));
+
+    expect($action->getContext())->toBe(['table' => true, 'bulk' => true]);
+});
+
+it('emits no bulk flag for a plain table action', function (): void {
+    $action = Action::make('edit')->table(Table::make(new TableHost()));
+
+    expect($action->getContext())->toBe(['table' => true]);
+});
+
+it('drops the bulk flag with the table flag on a nested frame', function (): void {
+    $action = BulkAction::make('delete')
+        ->table(Table::make(new TableHost()))
+        ->record(['__key' => '7'])
+        ->parentAction(Action::make('parent'));
+
+    expect($action->getContext())->toBe(['recordKey' => '7']);
 });

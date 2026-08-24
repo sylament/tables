@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Sylament\Tables\Tests\Fixtures\Concerns;
 
+use Doctrine\ORM\QueryBuilder;
 use LogicException;
 use Sylament\Schemas\Schema;
 use Sylament\Support\Pagination\Paginator;
@@ -79,5 +80,38 @@ final class BareTableHost implements InteractsWithTable
     public function getTableFiltersForm(): Schema
     {
         throw new LogicException('The bare table host builds no filters form.');
+    }
+
+    public function isTableRecordSelected(string $key): bool
+    {
+        return false;
+    }
+
+    public function hasSelectedTableRecords(): bool
+    {
+        return false;
+    }
+
+    /**
+     * @return list<object|array<string, mixed>>|list<string>
+     */
+    public function getSelectedTableRecords(bool $shouldFetchSelectedRecords = true): array
+    {
+        return [];
+    }
+
+    public function getSelectedTableRecordsQuery(bool $shouldFetchSelectedRecords = true): QueryBuilder
+    {
+        throw new LogicException('The bare table host selects no records.');
+    }
+
+    public function getAllSelectableTableRecordsCount(): ?int
+    {
+        return null;
+    }
+
+    public function deselectAllTableRecords(): void
+    {
+        //
     }
 }

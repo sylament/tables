@@ -5,11 +5,16 @@ declare(strict_types=1);
 namespace Sylament\Tables\Tests\Integration;
 
 use Closure;
+use Sylament\Actions\Action;
+use Sylament\Actions\ActionGroup;
+use Sylament\Actions\BulkAction;
+use Sylament\Actions\BulkActionGroup;
 use Sylament\Support\Pagination\Paginator;
 use Sylament\Tables\Columns\TextColumn;
 use Sylament\Tables\Contracts\InteractsWithTable;
 use Sylament\Tables\Enums\FiltersLayout;
 use Sylament\Tables\Enums\FiltersResetActionPosition;
+use Sylament\Tables\Enums\RecordCheckboxPosition;
 use Sylament\Tables\Filters\BaseFilter;
 use Sylament\Tables\Filters\Filter;
 use Sylament\Tables\Filters\Indicator;
@@ -17,6 +22,7 @@ use Sylament\Tables\Filters\SelectFilter;
 use Sylament\Tables\Table;
 use Sylament\Tables\Tests\Fixtures\Concerns\SchemaTableHost;
 use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
+use Sylament\Tables\Tests\Fixtures\Records\Song;
 use Sylament\Tables\Tests\Fixtures\Twig\Components\BrowsableSongsTable;
 use Sylament\Tables\Tests\Fixtures\Twig\Components\ExtremeLinksSongsTable;
 use Sylament\Tables\Twig\Extension\TableExtension;
@@ -500,4 +506,190 @@ it('renders the remove-all button as soon as one chip is removable', function ()
         ->and($removeAll->count())->toBe(1)
         ->and($removeAll->attr('aria-label'))->toBe('Remove all filters')
         ->and($removeAll->attr('data-live-action-param'))->toBe('removeTableFilters');
+});
+
+/**
+ * The selection lane: a two-record table whose bulk action turns the checkboxes
+ * on, with the host's own selection prop filled where a test needs the selected
+ * state the client would have written.
+ *
+ * @param list<string> $selectedKeys
+ */
+function selectionTableHtml(Closure $configureTable, array $selectedKeys = []): string
+{
+    $component = new TableHost(fn (Table $table): Table => $configureTable(
+        $table
+            ->records(fn (): array => [
+                new Song('Airbag', 'OK Computer', id: 1),
+                new Song('Let Down', 'OK Computer', id: 2),
+            ])
+            ->columns([TextColumn::make('title')]),
+    ));
+
+    $component->selectedTableRecordKeys = $selectedKeys;
+
+    return renderTableHost($component);
+}
+
+it('attaches the selection controller to the table root with its five values', function (): void {
+    $root = new Crawler(selectionTableHtml(
+        fn (Table $table): Table => $table->toolbarActions([BulkAction::make('archive')]),
+    ))->filter('div.sy.sy-ta');
+
+    expect($root->attr('data-controller'))->toBe('sylament--tables--table')
+        ->and($root->attr('data-sylament--tables--table-can-track-value'))->toBe('true')
+        ->and($root->attr('data-sylament--tables--table-page-only-value'))->toBe('true')
+        ->and($root->attr('data-sylament--tables--table-all-selectable-count-value'))->toBe('2')
+        ->and($root->attr('data-sylament--tables--table-count-one-value'))->toBe('1 record selected')
+        ->and($root->attr('data-sylament--tables--table-count-many-value'))->toBe(':count records selected');
+});
+
+it('renders the selection cells with the shared checkbox skin and the controller bindings', function (): void {
+    $crawler = new Crawler(selectionTableHtml(
+        fn (Table $table): Table => $table->toolbarActions([BulkAction::make('archive')]),
+    ));
+
+    $pageCheckbox = $crawler->filter('thead > tr > th.sy-ta-selection-cell > input.sy-checkbox.sy-ta-page-checkbox');
+    $rowCheckboxes = $crawler->filter('tbody > tr.sy-ta-row > td.sy-ta-cell.sy-ta-selection-cell > input.sy-checkbox.sy-ta-record-checkbox');
+
+    expect($pageCheckbox->count())->toBe(1)
+        ->and($pageCheckbox->attr('type'))->toBe('checkbox')
+        ->and($pageCheckbox->attr('data-sylament--tables--table-target'))->toBe('pageCheckbox')
+        ->and($pageCheckbox->attr('data-action'))->toBe('change->sylament--tables--table#togglePage')
+        ->and($rowCheckboxes->count())->toBe(2)
+        ->and($rowCheckboxes->each(fn (Crawler $box): ?string => $box->attr('value')))->toBe(['1', '2'])
+        ->and($rowCheckboxes->first()->attr('data-sylament--tables--table-target'))->toBe('recordCheckbox')
+        ->and($rowCheckboxes->first()->attr('data-action'))->toBe('change->sylament--tables--table#toggleRecord')
+        ->and($rowCheckboxes->first()->attr('checked'))->toBeNull()
+        ->and($crawler->filter('thead > tr > th')->first()->attr('class'))->toBe('sy-ta-selection-cell');
+});
+
+it('renders the selection banner hidden with its count target and its two links', function (): void {
+    $crawler = new Crawler(selectionTableHtml(
+        fn (Table $table): Table => $table->toolbarActions([BulkAction::make('archive')]),
+    ));
+
+    $banner = $crawler->filter('div.sy-ta-ctn > div.sy-ta-selection-indicator');
+    $links = $banner->filter('div.sy-ta-selection-indicator-actions-ctn > button.sy-link');
+
+    expect($banner->count())->toBe(1)
+        ->and($banner->attr('role'))->toBe('status')
+        ->and($banner->attr('aria-live'))->toBe('polite')
+        ->and($banner->attr('aria-atomic'))->toBe('true')
+        ->and($banner->attr('hidden'))->not->toBeNull()
+        ->and($banner->attr('data-sylament--tables--table-target'))->toBe('banner')
+        ->and($banner->filter('span[data-sylament--tables--table-target="count"]')->count())->toBe(1)
+        ->and($links->count())->toBe(2)
+        ->and($links->eq(0)->attr('data-sylament--tables--table-target'))->toBe('selectAll')
+        ->and($links->eq(0)->attr('data-action'))->toBe('click->sylament--tables--table#selectAll')
+        ->and($links->eq(0)->attr('hidden'))->not->toBeNull()
+        ->and(mb_trim($links->eq(0)->text()))->toBe('Select all 2')
+        ->and($links->eq(1)->attr('data-sylament--tables--table-target'))->toBe('deselectAll')
+        ->and($links->eq(1)->attr('data-action'))->toBe('click->sylament--tables--table#deselectAll')
+        ->and(mb_trim($links->eq(1)->text()))->toBe('Deselect all');
+});
+
+it('unhides the banner and the bulk trigger once a record is selected', function (): void {
+    $crawler = new Crawler(selectionTableHtml(
+        fn (Table $table): Table => $table->toolbarActions([BulkAction::make('archive')]),
+        selectedKeys: ['1'],
+    ));
+
+    $bulkTrigger = $crawler->filter('.sy-ta-header-toolbar-actions > span[data-sy-table-bulk-only]');
+
+    expect($crawler->filter('div.sy-ta-selection-indicator')->attr('hidden'))->toBeNull()
+        ->and($bulkTrigger->count())->toBe(1)
+        ->and($bulkTrigger->attr('hidden'))->toBeNull()
+        ->and($crawler->filter('tbody input.sy-ta-record-checkbox')->first()->attr('checked'))->not->toBeNull()
+        ->and($crawler->filter('tbody input.sy-ta-record-checkbox')->last()->attr('checked'))->toBeNull();
+});
+
+it('renders the toolbar start group with the header action before the hidden bulk trigger', function (): void {
+    $crawler = new Crawler(selectionTableHtml(fn (Table $table): Table => $table
+        ->headerActions([Action::make('create')->label('New song')])
+        ->toolbarActions([BulkAction::make('archive')])
+        ->searchable()));
+
+    $toolbar = $crawler->filter('.sy-ta-header-toolbar');
+    $start = $toolbar->filter('.sy-ta-header-toolbar-actions');
+    $wrappedTrigger = $start->filter('span[data-sy-table-bulk-only]');
+
+    expect($toolbar->children()->count())->toBe(2)
+        ->and($toolbar->children()->eq(0)->attr('class'))->toBe('sy-ta-header-toolbar-actions')
+        ->and($toolbar->children()->eq(1)->attr('class'))->toBe('sy-ta-header-toolbar-end')
+        ->and($start->children()->count())->toBe(2)
+        ->and(mb_trim($start->children()->eq(0)->text()))->toBe('New song')
+        ->and($start->children()->eq(0)->attr('data-sy-table-bulk-only'))->toBeNull()
+        ->and($wrappedTrigger->count())->toBe(1)
+        ->and($wrappedTrigger->attr('hidden'))->not->toBeNull()
+        ->and($wrappedTrigger->filter('button[data-sy-table-bulk-only]')->count())->toBe(1);
+});
+
+it('renders an empty selection cell for a record the table refuses', function (): void {
+    $crawler = new Crawler(selectionTableHtml(fn (Table $table): Table => $table
+        ->toolbarActions([BulkAction::make('archive')])
+        ->checkIfRecordIsSelectableUsing(fn (Song $record): bool => $record->id !== 2)));
+
+    $cells = $crawler->filter('tbody > tr.sy-ta-row > td.sy-ta-selection-cell');
+
+    expect($cells->count())->toBe(2)
+        ->and($cells->eq(0)->filter('input')->count())->toBe(1)
+        ->and($cells->eq(1)->filter('input')->count())->toBe(0)
+        ->and($crawler->filter('div.sy.sy-ta')->attr('data-sylament--tables--table-all-selectable-count-value'))->toBe('1');
+});
+
+it('moves the selection cells behind the columns for the AfterCells position', function (): void {
+    $crawler = new Crawler(selectionTableHtml(fn (Table $table): Table => $table
+        ->toolbarActions([BulkAction::make('archive')])
+        ->recordCheckboxPosition(RecordCheckboxPosition::AfterCells)));
+
+    expect($crawler->filter('thead > tr > th')->first()->attr('class'))->toContain('sy-ta-header-cell')
+        ->and($crawler->filter('thead > tr > th')->last()->attr('class'))->toBe('sy-ta-selection-cell')
+        ->and($crawler->filter('tbody > tr.sy-ta-row')->first()->filter('td')->last()->attr('class'))->toBe('sy-ta-cell sy-ta-selection-cell');
+});
+
+it('renders no selection chrome when selectable(false) overrides the bulk action', function (): void {
+    $html = selectionTableHtml(fn (Table $table): Table => $table
+        ->toolbarActions([BulkAction::make('archive')])
+        ->selectable(false));
+
+    expect($html)->not->toContain('sy-ta-selection-cell')
+        ->and($html)->not->toContain('sy-ta-selection-indicator')
+        ->and($html)->not->toContain('sylament--tables--table')
+        ->and($html)->toContain('sy-ta-header-toolbar-actions');
+});
+
+it('renders no selection controller and no toolbar for a table with no toolbar actions', function (): void {
+    $html = selectionTableHtml(fn (Table $table): Table => $table);
+
+    expect($html)->not->toContain('sylament--tables--table')
+        ->and($html)->not->toContain('sy-ta-selection-cell')
+        ->and($html)->not->toContain('sy-ta-selection-indicator')
+        ->and($html)->not->toContain('sy-ta-header-toolbar');
+});
+
+it('keeps the header-label list free of the selection column', function (): void {
+    $crawler = new Crawler(selectionTableHtml(
+        fn (Table $table): Table => $table->toolbarActions([BulkAction::make('archive')]),
+    ));
+
+    expect($crawler->filter('th.sy-ta-header-cell')->each(fn (Crawler $header): string => $header->text()))
+        ->toBe(['Title']);
+});
+
+it('marks a bulk action group on its dropdown root and leaves a plain group unwrapped', function (): void {
+    $crawler = new Crawler(selectionTableHtml(fn (Table $table): Table => $table->toolbarActions([
+        BulkActionGroup::make([BulkAction::make('archive')])->icon(null),
+        ActionGroup::make([Action::make('export')])->icon(null),
+    ])));
+
+    $start = $crawler->filter('.sy-ta-header-toolbar-actions');
+    $wrapped = $start->filter('span[data-sy-table-bulk-only]');
+
+    expect($start->children()->count())->toBe(2)
+        ->and($wrapped->count())->toBe(1)
+        ->and($wrapped->attr('hidden'))->not->toBeNull()
+        ->and($wrapped->filter('div.sy.sy-dropdown[data-sy-table-bulk-only]')->count())->toBe(1)
+        ->and($start->children()->eq(1)->attr('data-sy-table-bulk-only'))->toBeNull()
+        ->and($start->children()->eq(1)->filter('[data-sy-table-bulk-only]')->count())->toBe(0);
 });
