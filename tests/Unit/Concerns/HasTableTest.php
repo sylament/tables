@@ -6,6 +6,7 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\QueryBuilder;
 use Sylament\Support\Pagination\Paginator;
 use Sylament\Tables\Columns\TextColumn;
+use Sylament\Tables\Contracts\InteractsWithTable;
 use Sylament\Tables\Enums\PaginationMode;
 use Sylament\Tables\Filters\Filter;
 use Sylament\Tables\Table;
@@ -1045,4 +1046,10 @@ it('renders a column named after an association without joining it', function ()
 
     expect(everyCellState($host))->toBe(['Parlophone', 'XL', null])
         ->and($recorder->statements()[0])->not->toContain('LEFT JOIN');
+});
+
+it('declares the records-cache flush on the host contract', function (): void {
+    $method = new ReflectionMethod(InteractsWithTable::class, 'flushCachedTableRecords');
+
+    expect($method->getReturnType()?->getName())->toBe('void');
 });

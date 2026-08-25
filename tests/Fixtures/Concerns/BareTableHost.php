@@ -44,6 +44,11 @@ final class BareTableHost implements InteractsWithTable
         return null;
     }
 
+    public function flushCachedTableRecords(): void
+    {
+        //
+    }
+
     /**
      * @param object|array<string, mixed> $record
      */

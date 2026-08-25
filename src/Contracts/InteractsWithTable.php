@@ -30,6 +30,12 @@ interface InteractsWithTable
     public function getTableRecord(?string $key): object|array|null;
 
     /**
+     * Drop the memoised page of records so the next read re-queries — what a
+     * write from a mounted action needs before the table re-renders.
+     */
+    public function flushCachedTableRecords(): void;
+
+    /**
      * @param object|array<string, mixed> $record
      */
     public function getTableRecordKey(object|array $record): string;
