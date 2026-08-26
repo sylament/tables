@@ -233,7 +233,7 @@ trait HasTable
         $query = $this->getFilteredSortedTableQuery();
 
         if (!$query instanceof QueryBuilder) {
-            throw new LogicException(sprintf('Table [%s] must have [records()] or [query()].', static::class));
+            throw new LogicException(sprintf('Table [%s] must have [records()], [query()] or [relationship()].', static::class));
         }
 
         foreach ($table->getColumns() as $column) {
@@ -388,7 +388,7 @@ trait HasTable
         $recordClass = $table->getRecordClass();
 
         if (!$query instanceof QueryBuilder || $entityManager === null || $recordClass === null) {
-            throw new LogicException(sprintf('Table [%s] must have [records()] or [query()].', static::class));
+            throw new LogicException(sprintf('Table [%s] must have [records()], [query()] or [relationship()].', static::class));
         }
 
         $metadata = $entityManager->getClassMetadata($recordClass);

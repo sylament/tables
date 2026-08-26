@@ -3,11 +3,15 @@
 declare(strict_types=1);
 
 use Doctrine\ORM\QueryBuilder;
+use Sylament\Schemas\State\Relationship;
 use Sylament\Tables\Table;
 use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
 use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Artist;
+use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Genre;
 use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Song;
 use Sylament\Tables\Tests\Fixtures\Doctrine\EntityManagerFactory;
+
+use function Sylament\Tables\Tests\relationshipTable;
 
 it('returns a scoped clone on every read and never the stored builder', function (): void {
     $entityManager = EntityManagerFactory::create();
@@ -141,4 +145,59 @@ it('reads and caches the record class off the base query', function (): void {
     $table->query($entityManager->createQueryBuilder()->select('artist')->from(Artist::class, 'artist'));
 
     expect($table->getRecordClass())->toBe(Artist::class);
+});
+
+it('falls back to the relationship query when no query() is declared', function (): void {
+    $song = new Song(1, 'Airbag', 100);
+    $table = relationshipTable(fn (): Relationship => new Relationship($song, 'genres'));
+
+    expect($table->getRecordClass())->toBe(Genre::class)
+        ->and($table->getQuery()?->getRootAliases())->toBe(['record'])
+        ->and($table->getQuery()?->getDQL())->toContain('JOIN sy_owner.genres sy_related')
+        ->and($table->getQueryEntityManager())->not->toBeNull()
+        ->and($table->hasQuery())->toBeTrue();
+});
+
+it('lets query() win over relationship() and evaluates the relationship closure once', function (): void {
+    $entityManager = EntityManagerFactory::create();
+    $song = new Song(1, 'Airbag', 100);
+    $songs = $entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song');
+    $calls = 0;
+    $relationship = function () use (&$calls, $song): Relationship {
+        $calls++;
+
+        return new Relationship($song, 'genres');
+    };
+
+    $winner = relationshipTable($relationship, fn (Table $table): Table => $table->query($songs));
+    $counted = relationshipTable($relationship);
+    $counted->getRelationship();
+    $counted->getQuery();
+    $counted->getRecordClass();
+
+    expect($winner->getQuery()?->getDQL())->toBe($songs->getDQL())
+        ->and($winner->getRecordClass())->toBe(Song::class)
+        ->and($calls)->toBe(1);
+});
+
+it('resets the memoised base query when relationship() is set again', function (): void {
+    $song = new Song(1, 'Airbag', 100);
+    $artist = new Artist(1, 'Radiohead');
+    $table = relationshipTable(fn (): Relationship => new Relationship($song, 'genres'));
+
+    expect($table->getRecordClass())->toBe(Genre::class);
+
+    $table->relationship(fn (): Relationship => new Relationship($artist, 'songs'));
+
+    expect($table->getRecordClass())->toBe(Song::class)
+        ->and($table->getQuery()?->getDQL())->toContain('record.artist = :sylament_relationship_owner');
+});
+
+it('answers no query when the relationship closure returns null', function (): void {
+    $table = relationshipTable(fn (): ?Relationship => null);
+
+    expect($table->getRelationship())->toBeNull()
+        ->and($table->getQuery())->toBeNull()
+        ->and($table->getRecordClass())->toBeNull()
+        ->and($table->hasQuery())->toBeTrue();
 });

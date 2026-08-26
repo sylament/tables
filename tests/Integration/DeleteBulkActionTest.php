@@ -352,3 +352,14 @@ it('keeps the removal when the same cancelling body runs outside a transaction',
     expect($recorder->statements())->not->toContain(RecordingConnection::ROLLBACK)
         ->and(survivingSongIds($entityManager))->toBe([1, 3, 4]);
 });
+
+it('leaves the unselectable record behind on the by-key delete too', function (): void {
+    [$client, $entityManager] = seededBulkSongsClient();
+
+    $this->createLiveComponent('BulkDeleteSongsTable', ['checksSelectable' => true, 'fetchesRecords' => false], client: $client)
+        ->set('selectedTableRecords', ['2', '3'])
+        ->call('mountAction', ['name' => 'delete', 'arguments' => [], 'context' => ['table' => true, 'bulk' => true]])
+        ->call('callMountedAction');
+
+    expect(survivingSongIds($entityManager))->toBe([1, 3, 4]);
+});

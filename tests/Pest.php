@@ -4,12 +4,21 @@ declare(strict_types=1);
 
 namespace Sylament\Tables\Tests;
 
+use Closure;
+use Doctrine\ORM\EntityManagerInterface;
+use Sylament\Schemas\State\AssociationReader;
 use Sylament\Support\Components\ViewComponent;
 use Sylament\Support\Configuration\ComponentManager;
 use Sylament\Support\DependencyInjection\ComponentResolver;
 use Sylament\Tables\Filters\BaseFilter;
 use Sylament\Tables\Table;
 use Sylament\Tables\Tests\Fixtures\Concerns\FilterStateHost;
+use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
+use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Genre;
+use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Song;
+use Sylament\Tables\Tests\Fixtures\Doctrine\EntityManagerFactory;
+use Sylament\Tables\Tests\Fixtures\Doctrine\RecordingMiddleware;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 pest()
     ->extend(TestCase::class)
@@ -46,4 +55,48 @@ function renderToHtml(ViewComponent $component): string
 function attachFilter(BaseFilter $filter, array $state = [], array $formState = []): BaseFilter
 {
     return $filter->table(Table::make(new FilterStateHost(filterState: $state, filterFormState: $formState)));
+}
+
+/**
+ * A relation-scoped table built outside the container, so the association reader
+ * the `#[Required]` setter would have injected is set by hand over a fresh
+ * in-memory rig — the schemas Unit precedent.
+ */
+function relationshipTable(Closure $relationship, ?Closure $configure = null): Table
+{
+    $entityManager = EntityManagerFactory::create();
+    $table = new TableHost(fn (Table $table): Table => ($configure ?? fn (Table $table): Table => $table)($table->relationship($relationship)))->getTable();
+    $table->setAssociationReader(new AssociationReader($entityManager, $table->getPropertyAccessor()));
+
+    return $table;
+}
+
+/**
+ * Two songs and four genres — Rock (1), Pop (2), Jazz (3), Metal (4) — with
+ * song 1 carrying Rock, Pop and Jazz and song 2 Jazz and Metal, attached
+ * through {@see Song::addGenre()}; the identity map is left intact.
+ *
+ * @return array{KernelBrowser, EntityManagerInterface, RecordingMiddleware}
+ */
+function seededGenresClient(): array
+{
+    $client = test()->getContainer()->get('test.client');
+    $client->disableReboot();
+
+    $entityManager = test()->getContainer()->get(EntityManagerInterface::class);
+    $recorder = test()->getContainer()->get(RecordingMiddleware::class);
+
+    $genres = [new Genre(1, 'Rock'), new Genre(2, 'Pop'), new Genre(3, 'Jazz'), new Genre(4, 'Metal')];
+    $songs = [new Song(1, 'Airbag', 100), new Song(2, 'Paranoid Android', 200)];
+
+    foreach ([...$genres, ...$songs] as $entity) {
+        $entityManager->persist($entity);
+    }
+
+    $songs[0]->addGenre($genres[0])->addGenre($genres[1])->addGenre($genres[2]);
+    $songs[1]->addGenre($genres[2])->addGenre($genres[3]);
+    $entityManager->flush();
+    $recorder->reset();
+
+    return [$client, $entityManager, $recorder];
 }

@@ -15,7 +15,29 @@ class Artist
      * @var Collection<int, Song>
      */
     #[ORM\OneToMany(targetEntity: Song::class, mappedBy: 'artist')]
+    #[ORM\OrderBy(['title' => 'ASC'])]
     private Collection $songs;
+
+    /**
+     * Ordered **descending**, the one mapping order in either fixture repo that
+     * is: it is what tells the default sort's direction map apart from a
+     * hardcoded `asc`.
+     *
+     * @var Collection<int, Album>
+     */
+    #[ORM\OneToMany(targetEntity: Album::class, mappedBy: 'artist', orphanRemoval: true)]
+    #[ORM\OrderBy(['title' => 'DESC'])]
+    private Collection $albums;
+
+    /**
+     * The inverse side of a many-to-many, which Doctrine gives a `mappedBy` just
+     * as it does an inverse one-to-many — the shape a null test for that field
+     * would wave through.
+     *
+     * @var Collection<int, Song>
+     */
+    #[ORM\ManyToMany(targetEntity: Song::class, mappedBy: 'collaborators')]
+    private Collection $collaborations;
 
     public function __construct(
         #[ORM\Id]
@@ -29,6 +51,8 @@ class Artist
         private Address $address = new Address()
     ) {
         $this->songs = new ArrayCollection();
+        $this->albums = new ArrayCollection();
+        $this->collaborations = new ArrayCollection();
     }
 
     public function getId(): int
@@ -57,5 +81,43 @@ class Artist
     public function getSongs(): Collection
     {
         return $this->songs;
+    }
+
+    /**
+     * @return Collection<int, Album>
+     */
+    public function getAlbums(): Collection
+    {
+        return $this->albums;
+    }
+
+    /**
+     * @return Collection<int, Song>
+     */
+    public function getCollaborations(): Collection
+    {
+        return $this->collaborations;
+    }
+
+    public function addSong(Song $song): static
+    {
+        if (!$this->songs->contains($song)) {
+            $this->songs->add($song);
+        }
+
+        $song->setArtist($this);
+
+        return $this;
+    }
+
+    public function removeSong(Song $song): static
+    {
+        $this->songs->removeElement($song);
+
+        if ($song->getArtist() === $this) {
+            $song->setArtist(null);
+        }
+
+        return $this;
     }
 }

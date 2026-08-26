@@ -6,6 +6,7 @@ namespace Sylament\Tables\Table\Concerns;
 
 use Closure;
 use Doctrine\ORM\QueryBuilder;
+use Sylament\Schemas\State\Relationship;
 use Sylament\Tables\Columns\Column;
 
 trait CanSortRecords
@@ -48,14 +49,15 @@ trait CanSortRecords
 
     /**
      * A column name to order by, a builder the closure ordered and returned in
-     * place of `$query`, or null when the table declares no default sort.
+     * place of `$query`, or null when neither the table nor — on the
+     * relationship lane — its mapping declares a default sort.
      */
     public function getDefaultSort(QueryBuilder $query, string $direction): string|QueryBuilder|null
     {
         return $this->evaluate($this->defaultSort, [
             'direction' => $direction,
             'query' => $query,
-        ]);
+        ]) ?? $this->getRelationshipDefaultSort($query);
     }
 
     public function getDefaultSortDirection(): ?string
@@ -82,5 +84,40 @@ trait CanSortRecords
     public function hasDefaultKeySort(): bool
     {
         return (bool) $this->evaluate($this->hasDefaultKeySort);
+    }
+
+    /**
+     * The mapping's own order — `#[ORM\OrderBy]` on the association — appended
+     * as the default when the table declares none, so the table lists the
+     * collection in the order every other read of it uses; a clicked sort was
+     * applied before this runs and wins. Only the lane actually in force has a
+     * mapping to read, so a table whose `query()` won over its relationship is
+     * left alone — its root is the query's, which the mapping's fields do not
+     * name, and the closure that would resolve the owner stays unevaluated.
+     */
+    private function getRelationshipDefaultSort(QueryBuilder $query): ?QueryBuilder
+    {
+        if (!$this->isRelationshipBaseQuery()) {
+            return null;
+        }
+
+        $relationship = $this->getRelationship();
+        $rootAlias = $query->getRootAliases()[0] ?? null;
+
+        if (!$relationship instanceof Relationship || $rootAlias === null) {
+            return null;
+        }
+
+        $orderBy = $this->getAssociationReader()->describeRelationship($relationship)->orderBy;
+
+        if ($orderBy === []) {
+            return null;
+        }
+
+        foreach ($orderBy as $field => $direction) {
+            $query->addOrderBy(sprintf('%s.%s', $rootAlias, $field), mb_strtolower($direction) === 'desc' ? 'desc' : 'asc');
+        }
+
+        return $query;
     }
 }

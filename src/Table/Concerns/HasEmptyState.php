@@ -39,7 +39,7 @@ trait HasEmptyState
 
     public function getEmptyStateHeading(): string|Markup
     {
-        return $this->evaluate($this->emptyStateHeading) ?? 'No records';
+        return $this->evaluate($this->emptyStateHeading) ?? sprintf('No %s', $this->getPluralRecordLabel());
     }
 
     public function getEmptyStateDescription(): string|Markup|null

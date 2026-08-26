@@ -132,9 +132,9 @@ it('lets a later duplicate key overwrite an earlier record, matching the re-key 
         ->and($records[7]->title)->toBe('Let Down');
 });
 
-it('names both lanes when neither is configured', function (): void {
+it('names all three lanes when none is configured', function (): void {
     new TableHost()->getTableRecords();
-})->throws(LogicException::class, 'must have [records()] or [query()]');
+})->throws(LogicException::class, 'must have [records()], [query()] or [relationship()]');
 
 it('throws when the data source returns a non-iterable', function (): void {
     $host = new TableHost(fn (Table $table): Table => $table->records(fn (): string => 'nope'));
@@ -455,7 +455,7 @@ it('returns null for an unknown key and throws for a bare table', function (): v
 
     expect($host->getTableRecord('999'))->toBeNull()
         ->and(fn (): object|array|null => new TableHost()->getTableRecord('1'))
-        ->toThrow(LogicException::class, 'must have [records()] or [query()]');
+        ->toThrow(LogicException::class, 'must have [records()], [query()] or [relationship()]');
 });
 
 it('refuses to resolve a record carrying a composite identifier', function (): void {
