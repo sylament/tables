@@ -6,10 +6,9 @@ namespace Sylament\Tables\Concerns;
 
 use Doctrine\ORM\QueryBuilder;
 use Sylament\Tables\Filters\Indicator;
+use Sylament\Tables\Query\SearchTermSplitter;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
-
-use function Sylament\Support\filled;
 
 trait CanSearchRecords
 {
@@ -131,11 +130,6 @@ trait CanSearchRecords
      */
     protected function extractTableSearchWords(string $search): array
     {
-        $normalized = preg_replace('/(\s|\x{3164}|\x{1160})+/u', ' ', $search) ?? $search;
-
-        return array_values(array_filter(
-            str_getcsv($normalized, separator: ' ', escape: '\\'),
-            filled(...),
-        ));
+        return SearchTermSplitter::split($search);
     }
 }
