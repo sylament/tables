@@ -60,6 +60,35 @@ it('nests the populated table in the documented DOM contract', function (): void
         ->and($crawler->filter('div.sy-ta-empty-state')->count())->toBe(0);
 });
 
+it('nests the header in the documented DOM contract', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->records(fn (): array => [new Song('Airbag', 'OK Computer', id: 1)])
+        ->columns([TextColumn::make('title')])
+        ->heading('Songs')
+        ->description('Every song on file.')
+        ->headerActions([Action::make('create')->label('New song')]));
+
+    $crawler = new Crawler(renderToHtml($host->getTable()));
+    $header = $crawler->filter('div.sy-ta-ctn > div.sy-ta-header');
+
+    expect($header->count())->toBe(1)
+        ->and($header->attr('class'))->toBe('sy-ta-header sy-ta-header-adaptive-actions-position')
+        ->and($header->filter('div > h2.sy-ta-header-heading')->text())->toBe('Songs')
+        ->and($header->filter('div > p.sy-ta-header-description')->text())->toBe('Every song on file.')
+        ->and(mb_trim($header->filter('div.sy-ta-header-actions')->text()))->toBe('New song')
+        ->and($crawler->filter('div.sy-ta-header-toolbar')->count())->toBe(0);
+});
+
+it('renders no header block when no heading, description or header action fills it', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->records(fn (): array => [new Song('Airbag', 'OK Computer', id: 1)])
+        ->columns([TextColumn::make('title')]));
+
+    $crawler = new Crawler(renderToHtml($host->getTable()));
+
+    expect($crawler->filter('div.sy-ta-header')->count())->toBe(0);
+});
+
 it('nests the selection chrome in the documented DOM contract', function (): void {
     $host = new TableHost(fn (Table $table): Table => $table
         ->records(fn (): array => [new Song('Airbag', 'OK Computer', id: 1)])

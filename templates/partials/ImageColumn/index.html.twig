@@ -1,0 +1,41 @@
+{% set items = component.getStateItems %}
+{% set isStacked = component.isStacked %}
+{% set ring = isStacked ? component.getRing : null %}
+{% set overlap = isStacked ? component.getOverlap ?? 2 : null %}
+{% set remainingCount = component.getStateOverLimitCount %}
+{% set showRemainingText = remainingCount > 0 and component.hasLimitedRemainingText %}
+{% set dimensionStyles = [
+    'height: ' ~ height,
+    width ? 'width: ' ~ width : null,
+] %}
+
+<div {{ attrs({
+    class: [
+        'sy',
+        'sy-ta-image',
+        component.getAlignmentClass,
+        component.isCircular ? 'sy-circular' : null,
+        component.canWrap ? 'sy-wrapped' : null,
+        isStacked ? 'sy-stacked' : null,
+        ring is not null ? 'sy-ta-image-ring sy-ta-image-ring-' ~ ring : null,
+        overlap ? 'sy-ta-image-overlap-' ~ overlap : null,
+    ],
+}) }}>
+    {%- for item in items -%}
+        <img {{ attrs({
+            alt: item.alt ?? '',
+            src: item.url ?? '',
+            style: dimensionStyles,
+        }, component.getExtraImgAttributes) }} />
+    {%- endfor -%}
+
+    {%- if showRemainingText -%}
+        <div {{ attrs({
+            class: [
+                'sy-ta-image-limited-remaining-text',
+                component.getLimitedRemainingTextSizeClass,
+            ],
+            style: dimensionStyles,
+        }) }}>+{{ remainingCount }}</div>
+    {%- endif -%}
+</div>

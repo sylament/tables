@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Sylament\Tables\Tests\Fixtures;
 
+use League\FlysystemBundle\FlysystemBundle;
 use Sylament\Actions\SylamentActionsBundle;
 use Sylament\Forms\SylamentFormsBundle;
 use Sylament\Notifications\SylamentNotificationsBundle;
@@ -34,6 +35,7 @@ class Kernel extends BaseKernel
             new UXIconsBundle(),
             new StimulusBundle(),
             new LiveComponentBundle(),
+            new FlysystemBundle(),
 
             new SylamentActionsBundle(),
             new SylamentFormsBundle(),
@@ -75,6 +77,31 @@ class Kernel extends BaseKernel
         $container->extension('twig_component', [
             'anonymous_template_directory' => 'components',
             'defaults' => [],
+        ]);
+
+        // Two local storages under the cache directory, mirroring forms' fixture kernel:
+        // `test.storage` is the column's default and the only one that can mint a URL, since
+        // `public_url` is what gives a local adapter one at all; `other.storage` is the no-URL arm.
+        $container->extension('flysystem', [
+            'storages' => [
+                'test.storage' => [
+                    'local' => [
+                        'directory' => $this->getCacheDir() . '/storage/test',
+                    ],
+                    'visibility' => 'public',
+                    'directory_visibility' => 'public',
+                    'public_url' => '/files',
+                ],
+                'other.storage' => [
+                    'local' => [
+                        'directory' => $this->getCacheDir() . '/storage/other',
+                    ],
+                ],
+            ],
+        ]);
+
+        $container->extension('sylament', [
+            'default_filesystem_disk' => 'test.storage',
         ]);
 
         $container->import(__DIR__ . '/services_doctrine.php');

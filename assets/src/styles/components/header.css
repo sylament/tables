@@ -1,0 +1,59 @@
+.sy-ta-header {
+    @apply flex flex-col gap-3 border-b border-gray-200 p-4 sm:px-6 dark:border-white/10;
+
+    &.sy-ta-header-adaptive-actions-position {
+        @apply sm:flex-row sm:items-center;
+
+        & .sy-ta-header-actions {
+            @apply sm:ms-auto;
+        }
+
+        &:not(:has(.sy-ta-header-heading)) {
+            &:not(:has(.sy-ta-header-description)) {
+                & .sy-ta-header-actions {
+                    @apply ms-auto;
+                }
+            }
+        }
+    }
+
+    & .sy-ta-header-actions {
+        @apply flex max-w-full shrink-0 flex-wrap items-center justify-end gap-3;
+
+        & > * {
+            @apply shrink-0;
+        }
+
+        /* The negative margins let the buttons overhang the header's vertical padding, so a
+           header with actions matches the height of one without them. Applied to the container
+           so wrapped rows keep their gap, laddered so the largest button size present wins,
+           and scoped to `sm` since the header stacks vertically below it. */
+        &:has(.sy-btn.sy-size-xs:not(.sy-dropdown-panel *)) {
+            @apply sm:-my-0.5;
+        }
+
+        &:has(.sy-btn.sy-size-sm:not(.sy-dropdown-panel *)) {
+            @apply sm:-my-1;
+        }
+
+        &:has(.sy-btn.sy-size-md:not(.sy-dropdown-panel *)) {
+            @apply sm:-my-1.5;
+        }
+
+        &:has(.sy-btn.sy-size-lg:not(.sy-dropdown-panel *)) {
+            @apply sm:-my-2;
+        }
+
+        &:has(.sy-btn.sy-size-xl:not(.sy-dropdown-panel *)) {
+            @apply sm:-my-2.5;
+        }
+    }
+
+    & .sy-ta-header-heading {
+        @apply text-base leading-6 font-semibold text-gray-950 dark:text-white;
+    }
+
+    & .sy-ta-header-description {
+        @apply mt-1 text-sm text-gray-600 dark:text-gray-400;
+    }
+}

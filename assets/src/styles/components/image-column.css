@@ -1,0 +1,118 @@
+.sy-ta-image {
+    @apply flex w-full items-center gap-1.5 px-3 py-4;
+
+    & img {
+        @apply max-w-none object-cover object-center;
+    }
+
+    &.sy-circular {
+        & img {
+            @apply rounded-full;
+        }
+    }
+
+    &.sy-ta-image-ring {
+        & img,
+        & .sy-ta-image-limited-remaining-text {
+            @apply ring ring-white dark:ring-gray-900;
+        }
+
+        &.sy-ta-image-ring-1 {
+            & img,
+            & .sy-ta-image-limited-remaining-text {
+                @apply ring-1;
+            }
+        }
+
+        &.sy-ta-image-ring-2 {
+            & img,
+            & .sy-ta-image-limited-remaining-text {
+                @apply ring-2;
+            }
+        }
+
+        &.sy-ta-image-ring-4 {
+            & img,
+            & .sy-ta-image-limited-remaining-text {
+                @apply ring-4;
+            }
+        }
+    }
+
+    &.sy-ta-image-overlap-1 {
+        @apply gap-x-0 -space-x-1;
+    }
+
+    &.sy-ta-image-overlap-2 {
+        @apply gap-x-0 -space-x-2;
+    }
+
+    &.sy-ta-image-overlap-3 {
+        @apply gap-x-0 -space-x-3;
+    }
+
+    &.sy-ta-image-overlap-4 {
+        @apply gap-x-0 -space-x-4;
+    }
+
+    &.sy-ta-image-overlap-5 {
+        @apply gap-x-0 -space-x-5;
+    }
+
+    &.sy-ta-image-overlap-6 {
+        @apply gap-x-0 -space-x-6;
+    }
+
+    &.sy-ta-image-overlap-7 {
+        @apply gap-x-0 -space-x-7;
+    }
+
+    &.sy-ta-image-overlap-8 {
+        @apply gap-x-0 -space-x-8;
+    }
+
+    &.sy-wrapped {
+        @apply flex-wrap;
+    }
+
+    &.sy-align-start,
+    &.sy-align-left {
+        @apply justify-start;
+    }
+
+    &.sy-align-center {
+        @apply justify-center;
+    }
+
+    &.sy-align-end,
+    &.sy-align-right {
+        @apply justify-end;
+    }
+
+    &.sy-align-justify,
+    &.sy-align-between {
+        @apply justify-between;
+    }
+
+    &.sy-stacked {
+        & .sy-ta-image-limited-remaining-text {
+            @apply rounded-full bg-gray-100 dark:bg-gray-800;
+        }
+    }
+
+    & .sy-ta-image-limited-remaining-text {
+        @apply flex items-center justify-center text-sm font-medium text-gray-500 dark:text-gray-400;
+
+        &.sy-size-xs {
+            @apply text-xs;
+        }
+
+        &.sy-size-md {
+            @apply text-base;
+        }
+
+        &.sy-size-lg {
+            @apply text-lg;
+        }
+    }
+}

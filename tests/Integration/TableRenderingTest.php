@@ -604,22 +604,25 @@ it('unhides the banner and the bulk trigger once a record is selected', function
         ->and($crawler->filter('tbody input.sy-ta-record-checkbox')->last()->attr('checked'))->toBeNull();
 });
 
-it('renders the toolbar start group with the header action before the hidden bulk trigger', function (): void {
+it('renders header actions in the header block and the bulk trigger in the toolbar', function (): void {
     $crawler = new Crawler(selectionTableHtml(fn (Table $table): Table => $table
         ->headerActions([Action::make('create')->label('New song')])
         ->toolbarActions([BulkAction::make('archive')])
         ->searchable()));
 
+    $header = $crawler->filter('.sy-ta-header');
+    $headerActions = $header->filter('.sy-ta-header-actions');
     $toolbar = $crawler->filter('.sy-ta-header-toolbar');
     $start = $toolbar->filter('.sy-ta-header-toolbar-actions');
     $wrappedTrigger = $start->filter('span[data-sy-table-bulk-only]');
 
-    expect($toolbar->children()->count())->toBe(2)
+    expect($header->count())->toBe(1)
+        ->and(mb_trim($headerActions->text()))->toBe('New song')
+        ->and($headerActions->filter('[data-sy-table-bulk-only]')->count())->toBe(0)
+        ->and($toolbar->children()->count())->toBe(2)
         ->and($toolbar->children()->eq(0)->attr('class'))->toBe('sy-ta-header-toolbar-actions')
         ->and($toolbar->children()->eq(1)->attr('class'))->toBe('sy-ta-header-toolbar-end')
-        ->and($start->children()->count())->toBe(2)
-        ->and(mb_trim($start->children()->eq(0)->text()))->toBe('New song')
-        ->and($start->children()->eq(0)->attr('data-sy-table-bulk-only'))->toBeNull()
+        ->and($start->children()->count())->toBe(1)
         ->and($wrappedTrigger->count())->toBe(1)
         ->and($wrappedTrigger->attr('hidden'))->not->toBeNull()
         ->and($wrappedTrigger->filter('button[data-sy-table-bulk-only]')->count())->toBe(1);

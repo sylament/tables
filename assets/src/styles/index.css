@@ -1,5 +1,7 @@
 @import './components/filters.css' layer(components);
+@import './components/header.css' layer(components);
 @import './components/header-toolbar.css' layer(components);
+@import './components/image-column.css' layer(components);
 @import './components/selection.css' layer(components);
 @import './components/table.css' layer(components);
 @import './components/text-column.css' layer(components);

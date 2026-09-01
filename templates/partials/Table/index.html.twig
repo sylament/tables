@@ -16,7 +16,12 @@
 
 {% set headerActions = component.getHeaderActions|filter(action => action.isVisible) %}
 {% set toolbarActions = component.getToolbarActions|filter(action => action.isVisible) %}
-{% set toolbarVisible = isSearchable or filtersTriggerVisible or headerActions is not empty or toolbarActions is not empty %}
+{% set heading = component.getHeading %}
+{% set description = component.getDescription %}
+{% set headingTag = component.getHeadingTag %}
+{% set headerVisible = heading or description or headerActions is not empty %}
+{% set headerActionsAdaptive = component.getHeaderActionsPosition is same as(constant('Sylament\\Tables\\Enums\\HeaderActionsPosition::Adaptive')) %}
+{% set toolbarVisible = isSearchable or filtersTriggerVisible or toolbarActions is not empty %}
 
 {% set recordActionsByKey = component.getVisibleRecordActionsByRecordKey %}
 {% set hasRecordActions = recordActionsByKey|filter(actions => actions is not empty)|length > 0 %}
@@ -45,15 +50,48 @@
     countMany: ':count records selected',
 }) : null) }}>
     <div class="sy-ta-ctn">
+        {% if headerVisible %}
+            <div {{ attrs({class: classes('sy-ta-header', {'sy-ta-header-adaptive-actions-position': headerActions is not empty and headerActionsAdaptive})}) }}>
+                {% if heading or description %}
+                    <div>
+                        {% if heading %}
+                            <{{ headingTag }} class="sy-ta-header-heading">{{ heading }}</{{ headingTag }}>
+                        {% endif %}
+
+                        {% if description %}
+                            <p class="sy-ta-header-description">{{ description }}</p>
+                        {% endif %}
+                    </div>
+                {% endif %}
+
+                {% if headerActions is not empty %}
+                    <div class="sy-ta-header-actions">
+                        {% for action in headerActions %}
+                            {% set isBulkOnly = action.isBulk is defined
+                                ? action.isBulk
+                                : (action.getExtraDropdownAttributes['data-sy-table-bulk-only'] ?? false) %}
+
+                            {% if isBulkOnly %}
+                                <span {{ attrs({
+                                    'data-sy-table-bulk-only': true,
+                                    hidden: not hasSelection,
+                                }) }}>{{ renderComponent(action) }}</span>
+                            {% else %}
+                                {{ renderComponent(action) }}
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
+
         {% if toolbarVisible %}
             <div class="sy-ta-header-toolbar">
-                {% if headerActions is not empty or toolbarActions is not empty %}
+                {% if toolbarActions is not empty %}
                     <div class="sy-ta-header-toolbar-actions">
                         {# reorder trigger slot — M4 · 3 #}
 
-                        {# Header actions first, then toolbar actions: Filament's start-group order,
-                           walked as one list because a bulk-only member of either wraps the same way. #}
-                        {% for action in headerActions|merge(toolbarActions) %}
+                        {% for action in toolbarActions %}
                             {% set isBulkOnly = action.isBulk is defined
                                 ? action.isBulk
                                 : (action.getExtraDropdownAttributes['data-sy-table-bulk-only'] ?? false) %}
