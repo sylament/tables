@@ -17,6 +17,20 @@ trait CanSortRecords
 
     protected bool|Closure $hasDefaultKeySort = true;
 
+    protected bool|Closure $persistsSortInSession = false;
+
+    public function persistSortInSession(bool|Closure $condition = true): static
+    {
+        $this->persistsSortInSession = $condition;
+
+        return $this;
+    }
+
+    public function persistsSortInSession(): bool
+    {
+        return (bool) $this->evaluate($this->persistsSortInSession);
+    }
+
     public function defaultSort(string|Closure|null $column, string|Closure|null $direction = 'asc'): static
     {
         $this->defaultSort = $column;

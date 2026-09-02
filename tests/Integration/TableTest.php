@@ -120,7 +120,7 @@ it('nests the empty state in the documented DOM contract', function (): void {
     $content = $crawler->filter('div.sy-ta-empty-state[role="status"] > div.sy-ta-empty-state-content');
     expect($content->count())->toBe(1)
         ->and($content->filter('div.sy-ta-empty-state-icon-bg > svg')->count())->toBe(1)
-        ->and($content->filter('h3.sy-ta-empty-state-heading')->text())->toBe('No songs yet')
+        ->and($content->filter('h2.sy-ta-empty-state-heading')->text())->toBe('No songs yet')
         ->and($content->filter('p.sy-ta-empty-state-description')->text())->toBe('Add the first one.')
         ->and($crawler->filter('table')->count())->toBe(0);
 });

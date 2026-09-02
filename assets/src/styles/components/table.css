@@ -65,13 +65,42 @@
 
     & .sy-ta-row {
         @apply [@media(hover:hover)]:transition-colors [@media(hover:hover)]:duration-75;
+
+        &.sy-clickable {
+            @apply hover:bg-gray-50 dark:hover:bg-white/5;
+        }
+
+        &.sy-striped {
+            @apply bg-gray-50 dark:bg-white/5;
+        }
+
+        &.sy-selected {
+            &:not(.sy-striped) {
+                @apply bg-gray-50 dark:bg-white/5;
+            }
+
+            & > *:first-child {
+                @apply relative;
+
+                &::before {
+                    @apply absolute inset-y-0 start-0 w-0.5 bg-primary-600;
+                    content: '';
+                }
+
+                @variant dark {
+                    &::before {
+                        @apply bg-primary-500;
+                    }
+                }
+            }
+        }
     }
 
     & .sy-ta-cell {
         @apply p-0 first:ps-1 last:pe-1 sm:first:ps-3 sm:last:pe-3;
 
         & .sy-ta-col {
-            @apply flex w-full justify-start text-start;
+            @apply flex w-full justify-start text-start disabled:pointer-events-none;
         }
 
         &:has(.sy-ta-actions) {
@@ -83,12 +112,38 @@
         @apply w-1 px-3 py-4 first-of-type:ps-4 last-of-type:pe-4 sm:first-of-type:ps-6 sm:last-of-type:pe-6;
     }
 
+    & .sy-ta-reorder-handle-cell {
+        @apply w-1 px-3 py-4 first-of-type:ps-4 last-of-type:pe-4 sm:first-of-type:ps-6 sm:last-of-type:pe-6;
+
+        & .sy-ta-reorder-handle {
+            @apply cursor-move;
+        }
+    }
+
+    /* The drag control's own ghost class, reached under this table's scope so a
+       host application's identically named element is left alone. */
+    & .sy-ta-table-reordering .sy-sortable-ghost {
+        @apply opacity-50;
+    }
+
     & .sy-ta-actions {
         @apply flex max-w-full shrink-0 items-center justify-end gap-3;
 
         & > * {
             @apply shrink-0;
         }
+    }
+
+    & .sy-ta-reorder-indicator {
+        @apply border-b border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-6 font-medium text-gray-700 sm:px-6 sm:py-1.5 dark:border-white/10 dark:bg-white/5 dark:text-gray-200;
+    }
+
+    & .sy-ta-table-loading-ctn {
+        @apply flex h-32 items-center justify-center;
+    }
+
+    & .sy-ta-sr-only {
+        @apply sr-only;
     }
 
     & .sy-ta-empty-state {
@@ -112,6 +167,10 @@
 
         & .sy-ta-empty-state-description {
             @apply mt-1 text-sm text-gray-500 dark:text-gray-400;
+        }
+
+        & .sy-ta-empty-state-actions {
+            @apply mt-6 flex max-w-full flex-wrap items-center justify-center gap-3;
         }
     }
 }

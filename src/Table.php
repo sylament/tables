@@ -11,7 +11,11 @@ use Sylament\Support\Components\ViewComponent;
 use Sylament\Support\Evaluation\ClosureParameter;
 use Sylament\Tables\Contracts\InteractsWithTable;
 use Sylament\Tables\Table\Concerns\BelongsToLiveComponent;
+use Sylament\Tables\Table\Concerns\CanBeStriped;
+use Sylament\Tables\Table\Concerns\CanDeferLoading;
 use Sylament\Tables\Table\Concerns\CanPaginateRecords;
+use Sylament\Tables\Table\Concerns\CanPollRecords;
+use Sylament\Tables\Table\Concerns\CanReorderRecords;
 use Sylament\Tables\Table\Concerns\CanSearchRecords;
 use Sylament\Tables\Table\Concerns\CanSortRecords;
 use Sylament\Tables\Table\Concerns\HasActions;
@@ -25,8 +29,12 @@ use Sylament\Tables\Table\Concerns\HasHeader;
 use Sylament\Tables\Table\Concerns\HasHeaderActions;
 use Sylament\Tables\Table\Concerns\HasHeadings;
 use Sylament\Tables\Table\Concerns\HasQuery;
+use Sylament\Tables\Table\Concerns\HasQueryStringIdentifier;
+use Sylament\Tables\Table\Concerns\HasRecordAction;
 use Sylament\Tables\Table\Concerns\HasRecordActions;
+use Sylament\Tables\Table\Concerns\HasRecordClasses;
 use Sylament\Tables\Table\Concerns\HasRecords;
+use Sylament\Tables\Table\Concerns\HasRecordUrl;
 use Sylament\Tables\Table\Concerns\HasToolbarActions;
 
 class Table extends ViewComponent
@@ -34,7 +42,11 @@ class Table extends ViewComponent
     use BelongsToLiveComponent;
     use CanAccessAssociations;
     use CanAccessProperties;
+    use CanBeStriped;
+    use CanDeferLoading;
     use CanPaginateRecords;
+    use CanPollRecords;
+    use CanReorderRecords;
     use CanSearchRecords;
     use CanSortRecords;
     use HasActions;
@@ -48,8 +60,12 @@ class Table extends ViewComponent
     use HasHeaderActions;
     use HasHeadings;
     use HasQuery;
+    use HasQueryStringIdentifier;
+    use HasRecordAction;
     use HasRecordActions;
+    use HasRecordClasses;
     use HasRecords;
+    use HasRecordUrl;
     use HasToolbarActions;
 
     protected string $evaluationIdentifier = 'table';

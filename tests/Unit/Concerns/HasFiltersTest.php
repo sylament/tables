@@ -297,14 +297,25 @@ it('clears the search term and the page through resetTableSearch', function (): 
         ->and($host->tablePage)->toBe(1);
 });
 
-it('overwrites a mount-passed bag with the schema defaults', function (): void {
+it('fills the form from the bag the mount already holds, rather than from the schema defaults', function (): void {
     $host = filtersHost(fn (Table $table): Table => $table->filters([
         Filter::make('featured'),
         SelectFilter::make('status')->options(['draft' => 'Draft', 'published' => 'Published']),
     ]));
 
-    $host->tableDeferredFilters = ['featured' => ['isActive' => true], 'status' => ['value' => 'draft']];
-    $host->tableFilters = $host->tableDeferredFilters;
+    $host->tableFilters = ['status' => ['value' => 'draft']];
+
+    $host->mountTableFilters([]);
+
+    expect($host->tableDeferredFilters)->toBe(['status' => ['value' => 'draft'], 'featured' => ['isActive' => false]])
+        ->and($host->tableFilters)->toBe($host->tableDeferredFilters);
+});
+
+it('applies the schema defaults when the mount holds nothing', function (): void {
+    $host = filtersHost(fn (Table $table): Table => $table->filters([
+        Filter::make('featured'),
+        SelectFilter::make('status')->options(['draft' => 'Draft', 'published' => 'Published']),
+    ]));
 
     $host->mountTableFilters([]);
 

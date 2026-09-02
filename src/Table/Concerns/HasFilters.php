@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace Sylament\Tables\Table\Concerns;
 
+use BackedEnum;
 use Closure;
 use LogicException;
+use Sylament\Actions\Action;
 use Sylament\Schemas\Components\Group;
+use Sylament\Support\Enums\Size;
+use Sylament\Support\Icons\IconManager;
 use Sylament\Tables\Enums\FiltersLayout;
 use Sylament\Tables\Enums\FiltersResetActionPosition;
 use Sylament\Tables\Filters\BaseFilter;
+use Sylament\Tables\Twig\TablesIconAlias;
+use Twig\Markup;
 
 trait HasFilters
 {
@@ -34,6 +40,26 @@ trait HasFilters
     protected bool|Closure $hasDeferredFilters = true;
 
     protected bool|Closure $shouldDeselectAllRecordsWhenFiltered = true;
+
+    protected bool|Closure $persistsFiltersInSession = false;
+
+    protected Action|Closure|null $modifyFiltersTriggerActionUsing = null;
+
+    protected Action|Closure|null $modifyFiltersApplyActionUsing = null;
+
+    protected Action|Closure|null $modifyFiltersRemoveAllActionUsing = null;
+
+    public function persistFiltersInSession(bool|Closure $condition = true): static
+    {
+        $this->persistsFiltersInSession = $condition;
+
+        return $this;
+    }
+
+    public function persistsFiltersInSession(): bool
+    {
+        return (bool) $this->evaluate($this->persistsFiltersInSession);
+    }
 
     /**
      * @param array<BaseFilter> $filters
@@ -156,17 +182,69 @@ trait HasFilters
     }
 
     /**
+     * The layout every chrome branch reads, refused for the four whose
+     * before/after-content sidebar the toolkit does not ship.
+     * `getFiltersLayout()` stays total, so asking what the table wants never
+     * trips the refusal.
+     */
+    private function getConsumableFiltersLayout(): FiltersLayout
+    {
+        $layout = $this->getFiltersLayout();
+
+        if (in_array($layout, [FiltersLayout::BeforeContent, FiltersLayout::BeforeContentCollapsible, FiltersLayout::AfterContent, FiltersLayout::AfterContentCollapsible], true)) {
+            throw new LogicException(sprintf('Table [%s] requests the [%s] filters layout, which needs chrome the toolkit does not ship yet; use FiltersLayout::Dropdown, Modal, AboveContent, AboveContentCollapsible, BelowContent or Hidden.', $this->getLiveComponent()::class, $layout->name));
+        }
+
+        return $layout;
+    }
+
+    /**
      * Whether the toolbar renders the filters trigger and its dropdown panel.
      */
     public function hasFiltersDropdown(): bool
     {
-        $layout = $this->getFiltersLayout();
+        return $this->getConsumableFiltersLayout() === FiltersLayout::Dropdown;
+    }
 
-        if (!in_array($layout, [FiltersLayout::Dropdown, FiltersLayout::Hidden], true)) {
-            throw new LogicException(sprintf('Table [%s] requests the [%s] filters layout, which needs chrome the toolkit does not ship yet; use FiltersLayout::Dropdown or FiltersLayout::Hidden.', $this->getLiveComponent()::class, $layout->name));
-        }
+    /**
+     * Whether the filters form renders inside a modal the trigger opens.
+     */
+    public function hasFiltersModal(): bool
+    {
+        return $this->getConsumableFiltersLayout() === FiltersLayout::Modal;
+    }
 
-        return $layout === FiltersLayout::Dropdown;
+    /**
+     * Whether the toolbar renders the trigger at all — the two dialog layouts.
+     * The collapsible above-content panel carries its own toggle instead.
+     */
+    public function hasFiltersTrigger(): bool
+    {
+        return in_array($this->getConsumableFiltersLayout(), [FiltersLayout::Dropdown, FiltersLayout::Modal], true);
+    }
+
+    public function hasFiltersAboveContent(): bool
+    {
+        return in_array($this->getConsumableFiltersLayout(), [FiltersLayout::AboveContent, FiltersLayout::AboveContentCollapsible], true);
+    }
+
+    public function hasFiltersBelowContent(): bool
+    {
+        return $this->getConsumableFiltersLayout() === FiltersLayout::BelowContent;
+    }
+
+    public function hasCollapsibleFilters(): bool
+    {
+        return $this->getConsumableFiltersLayout() === FiltersLayout::AboveContentCollapsible;
+    }
+
+    /**
+     * The dialog element id the modal layout renders under and its trigger's
+     * invoker command points at.
+     */
+    public function getFiltersModalId(): string
+    {
+        return $this->getLiveComponent()->getTableHostId() . '.table.filters';
     }
 
     /**
@@ -180,11 +258,17 @@ trait HasFilters
     }
 
     /**
+     * A configured count wins; the layout match is only the fallback, so the
+     * responsive spread reaches the three layouts that span the content width.
+     *
      * @return array<string, int|null>|int
      */
     public function getFiltersFormColumns(): array|int
     {
-        return $this->evaluate($this->filtersFormColumns) ?? 1;
+        return $this->evaluate($this->filtersFormColumns) ?? match ($this->getFiltersLayout()) {
+            FiltersLayout::AboveContent, FiltersLayout::AboveContentCollapsible, FiltersLayout::BelowContent => ['sm' => 2, 'lg' => 3, 'xl' => 4, '2xl' => 5],
+            default => 1,
+        };
     }
 
     public function filtersFormMaxHeight(string|Closure|null $height): static
@@ -221,6 +305,107 @@ trait HasFilters
     public function getFiltersResetActionPosition(): FiltersResetActionPosition
     {
         return $this->evaluate($this->filtersResetActionPosition) ?? FiltersResetActionPosition::Header;
+    }
+
+    public function filtersTriggerAction(?Closure $callback): static
+    {
+        $this->modifyFiltersTriggerActionUsing = $callback;
+
+        return $this;
+    }
+
+    public function filtersApplyAction(?Closure $callback): static
+    {
+        $this->modifyFiltersApplyActionUsing = $callback;
+
+        return $this;
+    }
+
+    public function filtersRemoveAllAction(?Closure $callback): static
+    {
+        $this->modifyFiltersRemoveAllActionUsing = $callback;
+
+        return $this;
+    }
+
+    /**
+     * Opens the filters chrome from the client alone — the dropdown panel is
+     * the surrounding component's, the modal is reached by the invoker command
+     * stamped on for that layout — so the trigger wires no click of its own and
+     * never reaches the server.
+     *
+     * The command is stamped after the customization, as Filament stamps its
+     * own: `extraAttributes()` replaces unless told to merge, so a closure
+     * setting attributes of its own would otherwise leave the modal layout with
+     * nothing that opens it.
+     */
+    public function getFiltersTriggerAction(): Action
+    {
+        $action = Action::make('openFilters')
+            ->label('Filter')
+            ->iconButton()
+            ->icon($this->resolveFiltersIcon(TablesIconAlias::ACTIONS_FILTER, 'heroicons:funnel-20-solid'))
+            ->color('gray')
+            ->liveComponentClickHandlerEnabled(false)
+            ->table($this);
+
+        $action = $this->evaluate($this->modifyFiltersTriggerActionUsing, ['action' => $action]) ?? $action;
+
+        if ($this->hasFiltersModal()) {
+            $action->extraAttributes(['command' => 'show-modal', 'commandfor' => $this->getFiltersModalId()], merge: true);
+        }
+
+        return $action;
+    }
+
+    /**
+     * Visibility is the defer flag: a table filtering live has nothing to
+     * apply, and the panel keys its footer off this action.
+     */
+    public function getFiltersApplyAction(): Action
+    {
+        $action = Action::make('applyFilters')
+            ->label('Apply filters')
+            ->action('applyTableFilters')
+            ->visible($this->hasDeferredFilters())
+            ->button()
+            ->defaultSize(Size::Small)
+            ->table($this);
+
+        return $this->evaluate($this->modifyFiltersApplyActionUsing, ['action' => $action]) ?? $action;
+    }
+
+    /**
+     * The layout class is stamped after the customization for the reason the
+     * trigger's command is, at lower stakes: a closure setting attributes of its
+     * own would otherwise drop the chip row's own styling hook.
+     */
+    public function getFiltersRemoveAllAction(): Action
+    {
+        $action = Action::make('removeAllFilters')
+            ->label('Remove all filters')
+            ->action('removeTableFilters')
+            ->iconButton()
+            ->icon($this->resolveFiltersIcon(TablesIconAlias::FILTERS_REMOVE_ALL_BUTTON, 'heroicons:x-mark-20-solid'))
+            ->color('gray')
+            ->defaultSize(Size::Small)
+            ->table($this);
+
+        $action = $this->evaluate($this->modifyFiltersRemoveAllActionUsing, ['action' => $action]) ?? $action;
+
+        $action->extraAttributes(['class' => 'sy-ta-filter-indicators-remove-all-btn'], merge: true);
+
+        return $action;
+    }
+
+    /**
+     * The alias is resolved when the action evaluates its icon, so a table
+     * built outside the container — a unit fixture — still answers the
+     * fallback glyph rather than failing to resolve the manager.
+     */
+    private function resolveFiltersIcon(string $alias, string $fallback): Closure
+    {
+        return static fn (?IconManager $icons = null): string|BackedEnum|Markup => $icons?->resolve($alias) ?? $fallback;
     }
 
     public function isFilterable(): bool

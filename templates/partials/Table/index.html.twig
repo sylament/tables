@@ -1,8 +1,14 @@
-{% set records = component.getRecords %}
+{# Null until the deferred window closes, so every records-touching read below
+   stays gated on it — an ungated one queries a table that renders no rows. #}
+{% set records = component.isLoaded ? component.getRecords : null %}
 {% set columns = component.getColumns %}
 {% set hostId = component.getLiveComponent.getTableHostId %}
+{% set isReorderable = component.isReorderable %}
+{% set isReordering = component.isReordering %}
+{% set isDeferred = component.isLoadingDeferred %}
+{% set pollIntervalMilliseconds = isReordering ? null : component.getPollingIntervalMilliseconds %}
 
-{% set paginator = component.getPaginator %}
+{% set paginator = records is not null ? component.getPaginator : null %}
 {% set footerVisible = paginator and (paginator.getTotalRecordCount is null
     ? (paginator.count > 0 or not paginator.onFirstPage or paginator.hasMorePages)
     : paginator.getTotalRecordCount > 0) %}
@@ -10,20 +16,33 @@
 {% set sortDirection = component.getSortDirection %}
 {% set isSearchable = component.isSearchable %}
 {% set isFilterable = component.isFilterable %}
-{% set filtersTriggerVisible = isFilterable and component.hasFiltersDropdown %}
+{% set filtersTriggerVisible = isFilterable and component.hasFiltersTrigger %}
+{% set filtersDropdownVisible = isFilterable and component.hasFiltersDropdown %}
+{% set filtersModalVisible = isFilterable and component.hasFiltersModal %}
+{% set filtersAboveContent = isFilterable and component.hasFiltersAboveContent %}
+{% set filtersBelowContent = isFilterable and component.hasFiltersBelowContent %}
+{% set filtersCollapsible = isFilterable and component.hasCollapsibleFilters %}
+{% set filtersPanelVisible = filtersDropdownVisible or filtersAboveContent or filtersBelowContent %}
+{% set filtersChromeVisible = filtersPanelVisible or filtersModalVisible %}
+{% set activeFiltersCount = isFilterable ? component.getActiveFiltersCount : 0 %}
+{% set filtersApplyAction = filtersChromeVisible ? component.getFiltersApplyAction : null %}
+{% set filtersApplyVisible = filtersApplyAction is not null and filtersApplyAction.isVisible %}
+{% set filtersResetActionPosition = isFilterable ? component.getFiltersResetActionPosition : null %}
+{% set filtersForm = filtersChromeVisible ? renderComponent(component.getLiveComponent.getTableFiltersForm) : null %}
+
 {% set filterIndicators = component.getFilterIndicators %}
 {% set removableIndicatorCount = filterIndicators|filter(carrier => carrier.indicator.isRemovable)|length %}
 
-{% set headerActions = component.getHeaderActions|filter(action => action.isVisible) %}
-{% set toolbarActions = component.getToolbarActions|filter(action => action.isVisible) %}
+{% set headerActions = isReordering ? [] : component.getHeaderActions|filter(action => action.isVisible) %}
+{% set toolbarActions = isReordering ? [] : component.getToolbarActions|filter(action => action.isVisible) %}
 {% set heading = component.getHeading %}
 {% set description = component.getDescription %}
 {% set headingTag = component.getHeadingTag %}
 {% set headerVisible = heading or description or headerActions is not empty %}
 {% set headerActionsAdaptive = component.getHeaderActionsPosition is same as(constant('Sylament\\Tables\\Enums\\HeaderActionsPosition::Adaptive')) %}
-{% set toolbarVisible = isSearchable or filtersTriggerVisible or toolbarActions is not empty %}
+{% set toolbarVisible = isSearchable or filtersTriggerVisible or toolbarActions is not empty or isReorderable %}
 
-{% set recordActionsByKey = component.getVisibleRecordActionsByRecordKey %}
+{% set recordActionsByKey = isReordering or records is null ? {} : component.getVisibleRecordActionsByRecordKey %}
 {% set hasRecordActions = recordActionsByKey|filter(actions => actions is not empty)|length > 0 %}
 {% set recordActionsPosition = component.getRecordActionsPosition.name %}
 {% set actionsBeforeCells = hasRecordActions and recordActionsPosition == 'BeforeCells' %}
@@ -33,19 +52,54 @@
 
 {% set isSelectionEnabled = component.isSelectionEnabled %}
 {% set hasSelection = isSelectionEnabled and component.getLiveComponent.hasSelectedTableRecords %}
-{% set checkboxLeading = isSelectionEnabled and component.getRecordCheckboxPosition.name == 'BeforeCells' %}
-{% set checkboxTrailing = isSelectionEnabled and component.getRecordCheckboxPosition.name == 'AfterCells' %}
-{% set allSelectableCount = isSelectionEnabled ? component.getLiveComponent.getAllSelectableTableRecordsCount : null %}
+{% set checkboxLeading = isSelectionEnabled and not isReordering and component.getRecordCheckboxPosition.name == 'BeforeCells' %}
+{% set checkboxTrailing = isSelectionEnabled and not isReordering and component.getRecordCheckboxPosition.name == 'AfterCells' %}
+{% set allSelectableCount = isSelectionEnabled and not isReordering and records is not null ? component.getLiveComponent.getAllSelectableTableRecordsCount : null %}
 
+{% set isStriped = component.isStriped %}
+
+{% set emptyState = component.getEmptyState %}
 {% set emptyStateIcon = component.getEmptyStateIcon %}
+{% set emptyStateHeadingTag = heading ? component.getHeadingTag(1) : headingTag %}
 {% set emptyStateDescription = component.getEmptyStateDescription %}
+{% set emptyStateActions = component.getEmptyStateActions|filter(action => action.isVisible) %}
+
+{% set filtersCountBadge %}
+    {%- if activeFiltersCount > 0 -%}
+        <span class="sy-ta-filters-trigger-badge-ctn">
+            <twig:SylamentSupport:Badge class="sy-ta-filters-trigger-badge" size="xs">{{ activeFiltersCount }}</twig:SylamentSupport:Badge>
+        </span>
+    {%- endif -%}
+{% endset %}
+
+{% set filtersTriggerControl = null %}
+{% if filtersTriggerVisible %}
+    {% set filtersTriggerControl %}
+        <span class="sy-ta-filters-trigger">{{ renderComponent(component.getFiltersTriggerAction) }}{{ filtersCountBadge }}</span>
+    {% endset %}
+{% endif %}
+
+{% set filtersPanel = null %}
+{% if filtersPanelVisible %}
+    {% set filtersPanel %}
+        <twig:SylamentTables:Filters
+            :headingLevel="3"
+            :resetActionPosition="filtersResetActionPosition"
+            :schema="filtersForm"
+            :applyVisible="filtersApplyVisible"
+            :applyAction="filtersApplyAction"
+        />
+    {% endset %}
+{% endif %}
 
 <div {{ attrs({
     class: 'sy sy-ta',
-}, isSelectionEnabled ? stimulus_controller('sylament--tables--table', {
+}, isSelectionEnabled or isReorderable or isDeferred or pollIntervalMilliseconds is not null ? stimulus_controller('sylament--tables--table', {
     canTrack: component.canTrackDeselectedRecords,
     pageOnly: component.selectsCurrentPageOnly,
     allSelectableCount: allSelectableCount,
+    deferred: isDeferred,
+    pollInterval: pollIntervalMilliseconds,
     countOne: '1 record selected',
     countMany: ':count records selected',
 }) : null) }}>
@@ -87,9 +141,11 @@
 
         {% if toolbarVisible %}
             <div class="sy-ta-header-toolbar">
-                {% if toolbarActions is not empty %}
+                {% if isReorderable or toolbarActions is not empty %}
                     <div class="sy-ta-header-toolbar-actions">
-                        {# reorder trigger slot — M4 · 3 #}
+                        {% if isReorderable %}
+                            {{ renderComponent(component.getReorderRecordsTriggerAction(isReordering)) }}
+                        {% endif %}
 
                         {% for action in toolbarActions %}
                             {% set isBulkOnly = action.isBulk is defined
@@ -129,12 +185,7 @@
                         </label>
                     {% endif %}
 
-                    {% if filtersTriggerVisible %}
-                        {% set activeFiltersCount = component.getActiveFiltersCount %}
-                        {% set filtersApplyVisible = component.hasDeferredFilters %}
-                        {% set filtersResetActionPosition = component.getFiltersResetActionPosition %}
-                        {% set filtersForm %}{{ renderComponent(component.getLiveComponent.getTableFiltersForm) }}{% endset %}
-
+                    {% if filtersDropdownVisible %}
                         <twig:SylamentSupport:Dropdown
                             class="sy-ta-filters-dropdown"
                             placement="bottom-end"
@@ -143,32 +194,12 @@
                             :width="component.getFiltersFormWidth"
                             :maxHeight="component.getFiltersFormMaxHeight"
                         >
-                            <twig:block name="trigger">
-                                <span class="sy-ta-filters-trigger">
-                                    <twig:SylamentSupport:IconButton
-                                        icon="heroicons:funnel-20-solid"
-                                        :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::ACTIONS_FILTER')"
-                                        color="gray"
-                                        label="Filter"
-                                    />
+                            <twig:block name="trigger">{{ filtersTriggerControl }}</twig:block>
 
-                                    {% if activeFiltersCount > 0 %}
-                                        <span class="sy-ta-filters-trigger-badge-ctn">
-                                            <twig:SylamentSupport:Badge class="sy-ta-filters-trigger-badge" size="xs">{{ activeFiltersCount }}</twig:SylamentSupport:Badge>
-                                        </span>
-                                    {% endif %}
-                                </span>
-                            </twig:block>
-
-                            <twig:block name="content">
-                                <twig:SylamentTables:Filters
-                                    :headingLevel="3"
-                                    :resetActionPosition="filtersResetActionPosition"
-                                    :schema="filtersForm"
-                                    :applyVisible="filtersApplyVisible"
-                                />
-                            </twig:block>
+                            <twig:block name="content">{{ filtersPanel }}</twig:block>
                         </twig:SylamentSupport:Dropdown>
+                    {% elseif filtersModalVisible %}
+                        {{ filtersTriggerControl }}
                     {% endif %}
 
                     {# column manager slot — M4 · 5 #}
@@ -176,9 +207,29 @@
             </div>
         {% endif %}
 
-        {% if filterIndicators is not empty %}
-            {% set removeAllAttributes = stimulus_action('live', 'action', parameters: {action: 'removeTableFilters'}) %}
+        {% if filtersModalVisible %}
+            {% set filtersResetAttributes = stimulus_action('live', 'action', parameters: {action: 'resetTableFiltersForm'}) %}
 
+            <twig:SylamentSupport:Modal
+                :id="component.getFiltersModalId"
+                heading="Filters"
+                :width="component.getFiltersFormWidth ?? 'md'"
+            >
+                <twig:block name="content">{{ filtersForm }}</twig:block>
+
+                <twig:block name="footer">
+                    <div class="sy-modal-footer-actions">
+                        {% if filtersApplyVisible %}
+                            {{ renderComponent(filtersApplyAction) }}
+                        {% endif %}
+
+                        <twig:SylamentSupport:Button color="danger" size="sm" {{ ...filtersResetAttributes }}>Reset</twig:SylamentSupport:Button>
+                    </div>
+                </twig:block>
+            </twig:SylamentSupport:Modal>
+        {% endif %}
+
+        {% if filterIndicators is not empty %}
             <div class="sy-ta-filter-indicators">
                 <div class="sy-ta-filter-indicators-ctn">
                     <span class="sy-ta-filter-indicators-label">Active filters</span>
@@ -205,20 +256,37 @@
                 </div>
 
                 {% if removableIndicatorCount > 0 %}
-                    <twig:SylamentSupport:IconButton
-                        class="sy-ta-filter-indicators-remove-all-btn"
-                        icon="heroicons:x-mark-20-solid"
-                        :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::FILTERS_REMOVE_ALL_BUTTON')"
-                        size="sm"
-                        color="gray"
-                        label="Remove all filters"
-                        {{ ...removeAllAttributes }}
-                    />
+                    {{ renderComponent(component.getFiltersRemoveAllAction) }}
                 {% endif %}
             </div>
         {% endif %}
 
-        {% if isSelectionEnabled %}
+        {% if filtersAboveContent %}
+            {% if filtersCollapsible %}
+                <details {{ attrs({class: 'sy-ta-filters-above-content-ctn sy-ta-filters-collapsible', open: activeFiltersCount > 0}) }}>
+                    <summary class="sy-ta-filters-summary">
+                        <span class="sy-ta-filters-trigger">
+                            <twig:SylamentSupport:IconButton
+                                tag="span"
+                                icon="heroicons:funnel-20-solid"
+                                :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::ACTIONS_FILTER')"
+                                color="gray"
+                                label="Filter"
+                            />{{ filtersCountBadge }}</span>
+                    </summary>
+
+                    {{ filtersPanel }}
+                </details>
+            {% else %}
+                <div class="sy-ta-filters-above-content-ctn">{{ filtersPanel }}</div>
+            {% endif %}
+        {% endif %}
+
+        {% if isReordering %}
+            <div class="sy-ta-reorder-indicator" role="status" aria-live="polite">
+                Drag and drop the records into order.
+            </div>
+        {% elseif isSelectionEnabled and records is not null %}
             <div {{ attrs({
                 class: 'sy-ta-selection-indicator',
                 role: 'status',
@@ -249,22 +317,40 @@
             </div>
         {% endif %}
 
-        {% if records is empty %}
-            <div class="sy-ta-empty-state" role="status">
-                <div class="sy-ta-empty-state-content">
-                    <div class="sy-ta-empty-state-icon-bg">
-                        <twig:SylamentSupport:Icon
-                            :icon="emptyStateIcon ?? 'heroicons:x-mark'"
-                            :alias="emptyStateIcon ? null : constant('Sylament\\Tables\\Twig\\TablesIconAlias::EMPTY_STATE')"
-                            size="lg"
-                        />
-                    </div>
-                    <h3 class="sy-ta-empty-state-heading">{{ component.getEmptyStateHeading }}</h3>
-                    {% if emptyStateDescription %}
-                        <p class="sy-ta-empty-state-description">{{ emptyStateDescription }}</p>
-                    {% endif %}
-                </div>
+        {% if records is null %}
+            <div class="sy-ta-table-loading-ctn" role="status" aria-busy="true">
+                <twig:SylamentSupport:LoadingIndicator size="2xl" />
+
+                <span class="sy-ta-sr-only">Loading</span>
             </div>
+        {% elseif records is empty %}
+            {% if emptyState %}
+                {{ emptyState }}
+            {% else %}
+                <div class="sy-ta-empty-state" role="status">
+                    <div class="sy-ta-empty-state-content">
+                        <div class="sy-ta-empty-state-icon-bg">
+                            <twig:SylamentSupport:Icon
+                                :icon="emptyStateIcon ?? 'heroicons:x-mark'"
+                                :alias="emptyStateIcon ? null : constant('Sylament\\Tables\\Twig\\TablesIconAlias::EMPTY_STATE')"
+                                size="lg"
+                            />
+                        </div>
+                        <{{ emptyStateHeadingTag }} class="sy-ta-empty-state-heading">{{ component.getEmptyStateHeading }}</{{ emptyStateHeadingTag }}>
+                        {% if emptyStateDescription %}
+                            <p class="sy-ta-empty-state-description">{{ emptyStateDescription }}</p>
+                        {% endif %}
+
+                        {% if emptyStateActions is not empty %}
+                            <div class="sy-ta-empty-state-actions">
+                                {% for action in emptyStateActions %}
+                                    {{ renderComponent(action) }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
         {% else %}
             {% set actionsHeaderCell %}<th scope="col" aria-label="Actions" class="sy-ta-actions-header-cell sy-ta-empty-header-cell"></th>{% endset %}
 
@@ -278,15 +364,16 @@
                 </th>
             {% endset %}
 
-            <table class="sy-ta-table">
+            <table {{ attrs({class: classes('sy-ta-table', {'sy-ta-table-reordering': isReordering})}) }}>
                 <thead>
                     <tr>
+                        {% if isReordering %}<th scope="col" class="sy-ta-reorder-header-cell sy-ta-empty-header-cell"></th>{% endif %}
                         {% if actionsBeforeCells %}{{ actionsHeaderCell }}{% endif %}
                         {% if checkboxLeading %}{{ selectionHeaderCell }}{% endif %}
                         {% if actionsBeforeColumns %}{{ actionsHeaderCell }}{% endif %}
                         {% for column in columns %}
                             {% set columnName = column.getName %}
-                            {% set isColumnSortable = column.isSortable %}
+                            {% set isColumnSortable = column.isSortable and not isReordering %}
                             {% set isColumnSorted = isColumnSortable and sortColumn == columnName %}
                             <th
                                 scope="col"
@@ -321,8 +408,16 @@
                         {% if actionsAfterCells %}{{ actionsHeaderCell }}{% endif %}
                     </tr>
                 </thead>
-                <tbody>
+                <tbody {{ attrs(isReordering ? stimulus_controller('sylament--support--sortable', {
+                    animationDuration: component.getReorderAnimationDuration,
+                })|stimulus_action('sylament--tables--table', 'reorder', 'sylament--support--sortable:end') : null) }}>
                     {% for recordKey, record in records %}
+                        {% set recordUrl = component.getRecordUrl(record) %}
+                        {% set recordAction = component.getRecordAction(record) %}
+                        {% set openRecordUrlInNewTab = component.shouldOpenRecordUrlInNewTab(record) %}
+                        {% set recordLinkAttributes = recordUrl is not null ? component.getExtraRecordLinkAttributes(record) : {} %}
+                        {% set recordIsSelectable = isSelectionEnabled and component.isRecordSelectable(record) %}
+
                         {% set actionsCell %}{% if hasRecordActions %}
                             <td class="sy-ta-cell">
                                 <div class="sy-ta-actions">
@@ -335,7 +430,7 @@
 
                         {% set selectionCell %}{% if isSelectionEnabled %}
                             <td class="sy-ta-cell sy-ta-selection-cell">
-                                {% if component.isRecordSelectable(record) %}
+                                {% if recordIsSelectable %}
                                     <input {{ attrs({
                                         type: 'checkbox',
                                         class: 'sy-checkbox sy-ta-record-checkbox',
@@ -347,15 +442,58 @@
                             </td>
                         {% endif %}{% endset %}
 
-                        <tr class="sy-ta-row" id="{{ hostId ~ '.table.records.' ~ recordKey }}">
+                        <tr {{ attrs({
+                            class: classes('sy-ta-row', {
+                                'sy-clickable': recordUrl is not null or recordAction is not null,
+                                'sy-striped': isStriped and loop.index0 is odd,
+                                'sy-selected': recordIsSelectable and component.getLiveComponent.isTableRecordSelected(recordKey),
+                            }, component.getRecordClasses(record)),
+                            id: hostId ~ '.table.records.' ~ recordKey,
+                            'data-sortable-item': isReordering ? recordKey : null,
+                        }) }}>
+                            {% if isReordering %}
+                                <td class="sy-ta-cell sy-ta-reorder-handle-cell">
+                                    <twig:SylamentSupport:IconButton
+                                        class="sy-ta-reorder-handle"
+                                        icon="heroicons:bars-2"
+                                        :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::REORDER_HANDLE')"
+                                        color="gray"
+                                        :label="'Reorder item ' ~ recordKey"
+                                        :data-sortable-handle="true"
+                                    />
+                                </td>
+                            {% endif %}
                             {% if actionsBeforeCells %}{{ actionsCell }}{% endif %}
                             {% if checkboxLeading %}{{ selectionCell }}{% endif %}
                             {% if actionsBeforeColumns %}{{ actionsCell }}{% endif %}
                             {% for column in columns %}
                                 {% do column.record(record) %}
                                 {% do column.recordKey(recordKey) %}
+
+                                {# Column-level url/action arms slot in above the record-level ones — M4 · 4 #}
+                                {% set cellWrapperTag = isReordering
+                                    ? 'div'
+                                    : (recordUrl is not null
+                                        ? 'a'
+                                        : (recordAction is not null ? 'button' : 'div')) %}
+                                {% set cellWrapperAttributes = cellWrapperTag == 'a'
+                                    ? {
+                                        ...recordLinkAttributes,
+                                        href: recordUrl,
+                                        ...(openRecordUrlInNewTab ? {target: '_blank'} : {}),
+                                    }
+                                    : (cellWrapperTag == 'button'
+                                        ? {
+                                            type: 'button',
+                                            'data-loading': 'addAttribute(disabled)',
+                                            ...stimulus_action('live', 'action', parameters: component.getAction(recordAction)
+                                                ? {action: 'mountAction', name: recordAction, context: {recordKey: recordKey ~ '', table: true}}
+                                                : {action: recordAction, recordKey: recordKey ~ ''}),
+                                        }
+                                        : {}) %}
+
                                 <td class="sy-ta-cell" id="{{ hostId ~ '.table.record.' ~ recordKey ~ '.column.' ~ column.getName }}">
-                                    <div class="sy-ta-col">{{ renderComponent(column) }}</div>
+                                    <{{ cellWrapperTag }} {{ attrs({class: 'sy-ta-col'}, cellWrapperAttributes) }}>{{ renderComponent(column) }}</{{ cellWrapperTag }}>
                                 </td>
                             {% endfor %}
                             {% if actionsAfterColumns %}{{ actionsCell }}{% endif %}
@@ -365,6 +503,10 @@
                     {% endfor %}
                 </tbody>
             </table>
+        {% endif %}
+
+        {% if filtersBelowContent %}
+            <div class="sy-ta-filters-below-content-ctn">{{ filtersPanel }}</div>
         {% endif %}
 
         {% if footerVisible %}

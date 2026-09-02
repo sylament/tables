@@ -40,6 +40,20 @@ interface InteractsWithTable
      */
     public function getTableRecordKey(object|array $record): string;
 
+    /**
+     * Whether the table is in drag-reorder mode — re-gated by the definition, so
+     * it is false on a table that declares no reorder column. Read by the
+     * partial to suppress everything a drag must not compete with.
+     */
+    public function isTableReordering(): bool;
+
+    /**
+     * Whether the deferred window has closed — always true on a table that does
+     * not defer, so `Table::isLoaded()` answers for every table. Read by the
+     * partial as the gate on every records-touching call it makes.
+     */
+    public function isTableLoaded(): bool;
+
     public function getTableSortColumn(): ?string;
 
     public function getTableSortDirection(): ?string;

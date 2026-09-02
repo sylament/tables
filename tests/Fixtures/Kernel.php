@@ -48,6 +48,9 @@ class Kernel extends BaseKernel
 
     private function configureRoutes(RoutingConfigurator $routes): void
     {
+        // Ahead of the live route, whose `/{_live_component}/{_live_action}` matches
+        // any two-segment path — including the fixture page's.
+        $routes->import(__DIR__ . '/routes_fixtures.php');
         $routes->import('@LiveComponentBundle/config/routes.php');
     }
 
@@ -113,6 +116,7 @@ class Kernel extends BaseKernel
             ->load('Sylament\\Tables\\Tests\\Fixtures\\', __DIR__ . '/*')
                 ->exclude([
                     __DIR__ . '/Kernel.php',
+                    __DIR__ . '/routes_fixtures.php',
                     __DIR__ . '/services_doctrine.php',
                 ]);
     }

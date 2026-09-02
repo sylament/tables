@@ -11,6 +11,8 @@ use Sylament\Tables\Query\ColumnPathResolver;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveArg;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
+use Symfony\UX\LiveComponent\Metadata\UrlMapping;
+use Symfony\UX\TwigComponent\Attribute\PostMount;
 
 use function Sylament\Support\blank;
 
@@ -18,14 +20,52 @@ trait CanSortRecords
 {
     /**
      * `column:direction`, or a bare column meaning ascending; null when
-     * unsorted. Mutated only by `sortTable()`, so it stays checksummed.
+     * unsorted. Non-writable, so the client reaches it only through
+     * `sortTable()` — the query string and the session reach it at mount.
      */
-    #[LiveProp]
+    #[LiveProp(modifier: 'modifyTableSortProp')]
     public ?string $tableSort = null;
 
+    public function modifyTableSortProp(LiveProp $liveProp): LiveProp
+    {
+        $mapping = $this->getTableUrlMapping('sort');
+
+        return $mapping instanceof UrlMapping ? $liveProp->withUrl($mapping) : $liveProp;
+    }
+
     /**
-     * A request naming a column that is not declared sortable is ignored, so
-     * the `sortColumn` injection only ever carries declared-sortable names.
+     * The mount edge of the same check `sortTable()` runs, below the session
+     * read so that it covers both writers that bypass the action: a query string
+     * naming anything the table does not offer, and a session written against a
+     * table that has since dropped the column.
+     *
+     * The cleared value is written back, so a stale entry is forgotten rather
+     * than re-read and re-cleared on every later visit.
+     */
+    #[PostMount(priority: 5)]
+    public function healSeededTableSort(): void
+    {
+        if (blank($this->tableSort)) {
+            return;
+        }
+
+        $column = $this->getTableSortColumn();
+
+        if ($column !== null
+            && $this->getTableSortDirection() !== null
+            && $this->getTable()->getSortableVisibleColumn($column) !== null) {
+            return;
+        }
+
+        $this->tableSort = null;
+        $this->persistTableSortInSession();
+    }
+
+    /**
+     * Both writers of the property validate, so the `sortColumn` injection
+     * carries a name the table declared sortable when it was last written: a
+     * request naming anything else is ignored here, and a seeded value naming
+     * anything else is cleared at mount.
      */
     #[LiveAction]
     public function sortTable(#[LiveArg] string|int|null $column = null, #[LiveArg] ?string $direction = null): void
@@ -53,6 +93,7 @@ trait CanSortRecords
         $this->tableSort = $direction === null ? null : "{$column}:{$direction}";
         $this->tablePage = 1;
         $this->flushCachedTableRecords();
+        $this->persistTableSortInSession();
     }
 
     public function getTableSortColumn(): ?string
@@ -85,6 +126,17 @@ trait CanSortRecords
     protected function applySortingToTableQuery(QueryBuilder $query): QueryBuilder
     {
         $table = $this->getTable();
+
+        // A drag orders the rows itself, so the reorder column replaces every
+        // ordering the table would otherwise apply — the user's sort, the
+        // default sort and the identifier tiebreaker alike.
+        if ($this->isTableReordering()) {
+            return $query->orderBy(
+                ColumnPathResolver::resolveOrderable($query, (string) $table->getReorderColumn()),
+                $table->getReorderDirection() === 'desc' ? 'desc' : 'asc',
+            );
+        }
+
         $tableSortColumn = $this->getTableSortColumn();
 
         if ($tableSortColumn !== null) {

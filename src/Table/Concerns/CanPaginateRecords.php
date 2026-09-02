@@ -18,6 +18,8 @@ trait CanPaginateRecords
      */
     protected array|Closure|null $paginationPageOptions = null;
 
+    protected bool|Closure $isPaginatedWhileReordering = false;
+
     protected bool|Closure $hasExtremePaginationLinks = false;
 
     protected PaginationMode|Closure|null $paginationMode = null;
@@ -50,6 +52,18 @@ trait CanPaginateRecords
     public function paginationPageOptions(array|Closure|null $options): static
     {
         $this->paginationPageOptions = $options;
+
+        return $this;
+    }
+
+    /**
+     * Whether a drag may only reorder within the page it is shown. Off by
+     * default, because reordering fetches every row so a record can be dragged
+     * anywhere in the sequence.
+     */
+    public function paginatedWhileReordering(bool|Closure $condition = true): static
+    {
+        $this->isPaginatedWhileReordering = $condition;
 
         return $this;
     }
@@ -96,6 +110,11 @@ trait CanPaginateRecords
     public function isPaginated(): bool
     {
         return (bool) $this->evaluate($this->isPaginated);
+    }
+
+    public function isPaginatedWhileReordering(): bool
+    {
+        return (bool) $this->evaluate($this->isPaginatedWhileReordering);
     }
 
     public function hasExtremePaginationLinks(): bool

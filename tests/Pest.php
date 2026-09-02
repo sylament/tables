@@ -19,6 +19,7 @@ use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Song;
 use Sylament\Tables\Tests\Fixtures\Doctrine\EntityManagerFactory;
 use Sylament\Tables\Tests\Fixtures\Doctrine\RecordingMiddleware;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Component\DomCrawler\Crawler;
 
 pest()
     ->extend(TestCase::class)
@@ -99,4 +100,44 @@ function seededGenresClient(): array
     $recorder->reset();
 
     return [$client, $entityManager, $recorder];
+}
+
+/**
+ * A GET of the browsing-state fixture page, which renders the url-bound and the
+ * unbound host over one table. `test.client` is not a shared service, so a test
+ * needing two requests in one session must hand the first client back in — a
+ * second `get()` would come with an empty cookie jar.
+ *
+ * @return array{KernelBrowser, Crawler}
+ */
+function browseTo(string $query = '', ?KernelBrowser $client = null): array
+{
+    $client ??= test()->getContainer()->get('test.client');
+    $client->disableReboot();
+
+    return [$client, $client->request('GET', '/fixtures/browsing-state' . $query)];
+}
+
+/**
+ * The props one host published, decoded off its live root.
+ *
+ * @return array<string, mixed>
+ */
+function publishedProps(Crawler $crawler, string $selector): array
+{
+    $props = json_decode($crawler->filter($selector . ' [data-live-props-value]')->attr('data-live-props-value') ?? '', true, flags: JSON_THROW_ON_ERROR);
+
+    expect($props)->toBeArray();
+    assert(is_array($props));
+
+    /** @var array<string, mixed> $props */
+    return $props;
+}
+
+/**
+ * The text one host rendered, its own live root and everything under it.
+ */
+function renderedRowsOf(Crawler $crawler, string $componentName): string
+{
+    return $crawler->filter(sprintf('[data-live-name-value="%s"]', $componentName))->text();
 }

@@ -38,7 +38,13 @@ class Song
         #[ORM\ManyToOne(targetEntity: Artist::class, inversedBy: 'songs')]
         private ?Artist $artist = null,
         #[ORM\Column(nullable: true)]
-        private ?bool $isFeatured = null
+        private ?bool $isFeatured = null,
+        /**
+         * The reorder lane's position column — a plain writable field the drag
+         * write assigns 1..N onto.
+         */
+        #[ORM\Column(nullable: true)]
+        private ?int $position = null
     ) {
         $this->genres = new ArrayCollection();
         $this->collaborators = new ArrayCollection();
@@ -67,6 +73,18 @@ class Song
     public function isFeatured(): ?bool
     {
         return $this->isFeatured;
+    }
+
+    public function getPosition(): ?int
+    {
+        return $this->position;
+    }
+
+    public function setPosition(?int $position): static
+    {
+        $this->position = $position;
+
+        return $this;
     }
 
     /**

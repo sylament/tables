@@ -32,6 +32,20 @@ trait CanSearchRecords
 
     protected ?Closure $searchUsing = null;
 
+    protected bool|Closure $persistsSearchInSession = false;
+
+    public function persistSearchInSession(bool|Closure $condition = true): static
+    {
+        $this->persistsSearchInSession = $condition;
+
+        return $this;
+    }
+
+    public function persistsSearchInSession(): bool
+    {
+        return (bool) $this->evaluate($this->persistsSearchInSession);
+    }
+
     /**
      * @param bool|array<string|Closure> $condition
      */

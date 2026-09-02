@@ -4,14 +4,15 @@
 
     schema = null,
 
-    applyVisible = false
+    applyVisible = false,
+    applyAction = null
 %}
 
 {% set headingTag = 'h' ~ headingLevel %}
 {% set resetInFooter = resetActionPosition is not null and resetActionPosition.name == 'Footer' %}
-{% set footerVisible = applyVisible or resetInFooter %}
+{% set applyRendered = applyVisible and applyAction is not null %}
+{% set footerVisible = applyRendered or resetInFooter %}
 {% set resetAttributes = stimulus_action('live', 'action', parameters: {action: 'resetTableFiltersForm'}) %}
-{% set applyAttributes = stimulus_action('live', 'action', parameters: {action: 'applyTableFilters'}) %}
 
 <div {{ attributes.defaults({class: classes('sy sy-ta-filters')}) }}>
     <div class="sy-ta-filters-header">
@@ -33,8 +34,8 @@
 
     {% if footerVisible %}
         <div class="sy-ta-filters-actions-ctn">
-            {% if applyVisible %}
-                <twig:SylamentSupport:Button size="sm" {{ ...applyAttributes }}>Apply filters</twig:SylamentSupport:Button>
+            {% if applyRendered %}
+                {{ renderComponent(applyAction) }}
             {% endif %}
 
             {% if resetInFooter %}

@@ -2,12 +2,31 @@
 
 declare(strict_types=1);
 
+use Sylament\Tables\Table;
 use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
+use Sylament\Tables\Tests\Fixtures\Concerns\UrlMappedTableHost;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveArg;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
+use Symfony\UX\LiveComponent\Metadata\UrlMapping;
 
-it('declares the table state as LiveProps with the intended writability, hooks and wire bridges', function (string $property, bool $writable, ?string $onUpdated, ?string $dehydrateWith, bool $url, string $fieldName): void {
+/**
+ * Each bound prop's modifier applied to a fresh `LiveProp`, keyed by the name
+ * the host's mapping hook is asked for.
+ *
+ * @return array<string, LiveProp>
+ */
+function modifyTableUrlProps(UrlMappedTableHost $host): array
+{
+    return [
+        'page' => $host->modifyTablePageProp(new LiveProp()),
+        'sort' => $host->modifyTableSortProp(new LiveProp()),
+        'search' => $host->modifyTableSearchProp(new LiveProp()),
+        'filters' => $host->modifyTableFiltersProp(new LiveProp()),
+    ];
+}
+
+it('declares the table state as LiveProps with the intended writability, hooks and wire bridges', function (string $property, bool $writable, ?string $onUpdated, ?string $dehydrateWith, bool $url, string $fieldName, ?string $modifier = null): void {
     $attributes = new ReflectionProperty(TableHost::class, $property)->getAttributes(LiveProp::class);
 
     expect($attributes)->toHaveCount(1);
@@ -18,17 +37,18 @@ it('declares the table state as LiveProps with the intended writability, hooks a
         ->and($prop->onUpdated())->toBe($onUpdated)
         ->and($prop->dehydrateMethod())->toBe($dehydrateWith)
         ->and($prop->url())->toBe($url)
+        ->and($prop->modifier())->toBe($modifier)
         ->and($prop->calculateFieldName(new TableHost(), $property))->toBe($fieldName);
 
-    foreach (array_filter([$onUpdated, $dehydrateWith]) as $method) {
+    foreach (array_filter([$onUpdated, $dehydrateWith, $modifier]) as $method) {
         expect(method_exists(TableHost::class, $method))->toBeTrue();
     }
 })->with([
-    'sort' => ['tableSort', false, null, null, false, 'tableSort'],
-    'page' => ['tablePage', false, null, null, false, 'tablePage'],
+    'sort' => ['tableSort', false, null, null, false, 'tableSort', 'modifyTableSortProp'],
+    'page' => ['tablePage', false, null, null, false, 'tablePage', 'modifyTablePageProp'],
     'per page' => ['tableRecordsPerPage', true, 'updatedTableRecordsPerPage', 'dehydrateTableRecordsPerPage', false, 'tableRecordsPerPage'],
-    'search' => ['tableSearch', true, 'updatedTableSearch', 'dehydrateTableSearch', false, 'tableSearch'],
-    'filters' => ['tableFilters', true, 'updatedTableFilters', null, false, 'tableFilters'],
+    'search' => ['tableSearch', true, 'updatedTableSearch', 'dehydrateTableSearch', false, 'tableSearch', 'modifyTableSearchProp'],
+    'filters' => ['tableFilters', true, 'updatedTableFilters', null, false, 'tableFilters', 'modifyTableFiltersProp'],
     'deferred filters' => ['tableDeferredFilters', true, null, null, false, 'tableDeferredFilters'],
     'selected records' => ['selectedTableRecordKeys', true, null, null, false, 'selectedTableRecords'],
     'deselected records' => ['deselectedTableRecords', true, null, null, false, 'deselectedTableRecords'],
@@ -54,3 +74,53 @@ it('exposes the table state mutations as live actions with live args', function 
     'resetTableSearch' => ['resetTableSearch', []],
     'selectAllTableRecords' => ['selectAllTableRecords', []],
 ]);
+
+it('leaves every bound LiveProp untouched when the host maps nothing', function (): void {
+    foreach (modifyTableUrlProps(new UrlMappedTableHost()) as $liveProp) {
+        expect($liveProp->url())->toBeFalse();
+    }
+});
+
+it('binds a LiveProp to the URL under the name the host maps for it', function (): void {
+    $mappings = [
+        'page' => new UrlMapping(as: 'articlesPage'),
+        'sort' => new UrlMapping(as: 'sort'),
+        'search' => new UrlMapping(as: 'search'),
+        'filters' => new UrlMapping(as: 'filters'),
+    ];
+
+    foreach (modifyTableUrlProps(new UrlMappedTableHost($mappings)) as $prop => $liveProp) {
+        $url = $liveProp->url();
+
+        expect($url)->toBeInstanceOf(UrlMapping::class);
+        assert($url instanceof UrlMapping);
+        expect($url->as)->toBe($mappings[$prop]->as);
+    }
+});
+
+it('maps one prop without touching its siblings', function (): void {
+    $liveProps = modifyTableUrlProps(new UrlMappedTableHost(['sort' => new UrlMapping(as: 'sort')]));
+
+    expect($liveProps['sort']->url())->toBeInstanceOf(UrlMapping::class)
+        ->and($liveProps['page']->url())->toBeFalse()
+        ->and($liveProps['search']->url())->toBeFalse()
+        ->and($liveProps['filters']->url())->toBeFalse();
+});
+
+it('builds no table while modifying a prop, so nothing resolves before the component is hydrated', function (): void {
+    $host = new UrlMappedTableHost(
+        mappings: [
+            'page' => new UrlMapping(as: 'page'),
+            'sort' => new UrlMapping(as: 'sort'),
+            'search' => new UrlMapping(as: 'search'),
+            'filters' => new UrlMapping(as: 'filters'),
+        ],
+        refusesTable: true,
+    );
+
+    foreach (modifyTableUrlProps($host) as $liveProp) {
+        expect($liveProp->url())->toBeInstanceOf(UrlMapping::class);
+    }
+
+    expect(fn (): Table => $host->getTable())->toThrow(LogicException::class);
+});

@@ -9,11 +9,19 @@ use Sylament\Tables\Filters\Indicator;
 use Sylament\Tables\Query\SearchTermSplitter;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
+use Symfony\UX\LiveComponent\Metadata\UrlMapping;
 
 trait CanSearchRecords
 {
-    #[LiveProp(writable: true, dehydrateWith: 'dehydrateTableSearch', onUpdated: 'updatedTableSearch')]
+    #[LiveProp(writable: true, dehydrateWith: 'dehydrateTableSearch', onUpdated: 'updatedTableSearch', modifier: 'modifyTableSearchProp')]
     public ?string $tableSearch = '';
+
+    public function modifyTableSearchProp(LiveProp $liveProp): LiveProp
+    {
+        $mapping = $this->getTableUrlMapping('search');
+
+        return $mapping instanceof UrlMapping ? $liveProp->withUrl($mapping) : $liveProp;
+    }
 
     /**
      * The wire value is the search input's own — the raw property, not the
@@ -36,6 +44,7 @@ trait CanSearchRecords
 
         $this->tablePage = 1;
         $this->flushCachedTableRecords();
+        $this->persistTableSearchInSession();
     }
 
     /**
@@ -52,6 +61,7 @@ trait CanSearchRecords
         $this->tableSearch = '';
         $this->tablePage = 1;
         $this->flushCachedTableRecords();
+        $this->persistTableSearchInSession();
     }
 
     /**

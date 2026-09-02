@@ -24,6 +24,28 @@
     }
 }
 
+.sy-ta-filters-above-content-ctn {
+    @apply border-b border-gray-200 p-4 sm:px-6 dark:border-white/10;
+}
+
+.sy-ta-filters-below-content-ctn {
+    @apply border-t border-gray-200 p-4 sm:px-6 dark:border-white/10;
+}
+
+.sy-ta-filters-collapsible {
+    @apply grid gap-y-4;
+
+    /* `list-none` alone leaves the disclosure triangle in Safari, which paints it
+       through a shadow pseudo-element rather than the list marker. */
+    & > .sy-ta-filters-summary {
+        @apply flex cursor-pointer list-none items-center gap-x-3;
+
+        &::-webkit-details-marker {
+            @apply hidden;
+        }
+    }
+}
+
 .sy-ta-filters-trigger {
     @apply relative inline-flex;
 

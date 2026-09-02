@@ -15,6 +15,7 @@ use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveArg;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
 use Symfony\UX\LiveComponent\Attribute\PostHydrate;
+use Symfony\UX\LiveComponent\Metadata\UrlMapping;
 use Symfony\UX\TwigComponent\Attribute\PostMount;
 
 use function Sylament\Support\filled;
@@ -26,8 +27,15 @@ trait HasFilters
      *
      * @var array<string, mixed>
      */
-    #[LiveProp(writable: true, onUpdated: 'updatedTableFilters')]
+    #[LiveProp(writable: true, onUpdated: 'updatedTableFilters', modifier: 'modifyTableFiltersProp')]
     public array $tableFilters = [];
+
+    public function modifyTableFiltersProp(LiveProp $liveProp): LiveProp
+    {
+        $mapping = $this->getTableUrlMapping('filters');
+
+        return $mapping instanceof UrlMapping ? $liveProp->withUrl($mapping) : $liveProp;
+    }
 
     /**
      * The draft the filters form binds to while filters are deferred.
@@ -133,8 +141,53 @@ trait HasFilters
     }
 
     /**
+     * The filter bag's own query-string seed, running above the session hook so
+     * that the URL still wins over what the session remembers.
+     *
+     * UX seeds every other bound prop for us and refuses this one: it assigns a
+     * seeded value only when the prop's resolved type accepts it, and
+     * `property-info` reads `removeTableFilter()` as a *remover* for a
+     * `tableFilter` singular, inferring `list<string>` for the bag — which no
+     * filter state ever is. Reading the parameter here is immune to that, and
+     * idempotent with UX's own seeding wherever an application's property-info
+     * chain does resolve the bag from its docblock.
+     *
+     * Which is also why declining a malformed bag has to empty it rather than
+     * return: UX has already assigned whatever the parameter carried, so leaving
+     * it alone would keep a list in a filter-name-keyed prop and suppress every
+     * filter's declared default. The parameter's absence stays a no-op — there
+     * is nothing for either seeding to have assigned.
+     */
+    #[PostMount(priority: 20)]
+    public function mountTableFiltersFromQueryString(): void
+    {
+        $mapping = $this->getTableUrlMapping('filters');
+
+        if (!$mapping instanceof UrlMapping) {
+            return;
+        }
+
+        $query = $this->getTableStateMainRequest()?->query;
+        $parameter = $mapping->as ?? 'tableFilters';
+
+        if ($query === null || !$query->has($parameter)) {
+            return;
+        }
+
+        $seeded = $query->all()[$parameter];
+
+        $this->tableFilters = self::isPersistedTableFilterBag($seeded) ? $seeded : [];
+    }
+
+    /**
      * Seed each filter's declared default, then — while deferring — copy the
      * draft across so those defaults are applied state from the first render.
+     *
+     * A bag already holding something at this point was seeded from the query
+     * string or read back from the session, and it fills the form *instead of*
+     * the defaults — so the copy into the applied bag reads the filled form
+     * rather than the draft as it stood before, which is what keeps the seed
+     * from being overwritten by state nobody asked for.
      *
      * @param array<string, mixed> $data
      *
@@ -149,13 +202,54 @@ trait HasFilters
             return $data;
         }
 
-        $this->getTableFiltersForm()->fill();
+        $seededFilters = null;
+
+        if ($this->tableFilters !== []) {
+            $seededFilters = self::normalizeTableFilterValuesFromQueryString($this->tableFilters);
+
+            $this->tableFilters = $seededFilters;
+        }
+
+        $this->getTableFiltersForm()->fill($seededFilters);
 
         if ($table->hasDeferredFilters()) {
             $this->tableFilters = $this->tableDeferredFilters;
         }
 
+        $this->persistTableFiltersInSession();
+
         return $data;
+    }
+
+    /**
+     * A query string carries no types, so the three scalars a filter can hold
+     * arrive as their own names — `'null'`, `'false'`, `'true'` — and a ternary
+     * filter reading the string `'false'` would take its *true* arm.
+     *
+     * @template TKey of array-key
+     *
+     * @param array<TKey, mixed> $state
+     *
+     * @return array<TKey, mixed>
+     */
+    private static function normalizeTableFilterValuesFromQueryString(array $state): array
+    {
+        foreach ($state as $key => $value) {
+            if (is_array($value)) {
+                $state[$key] = self::normalizeTableFilterValuesFromQueryString($value);
+
+                continue;
+            }
+
+            $state[$key] = match ($value) {
+                'null' => null,
+                'false' => false,
+                'true' => true,
+                default => $value,
+            };
+        }
+
+        return $state;
     }
 
     /**
@@ -198,6 +292,7 @@ trait HasFilters
 
         $this->tablePage = 1;
         $this->flushCachedTableRecords();
+        $this->persistTableFiltersInSession();
     }
 
     /**
