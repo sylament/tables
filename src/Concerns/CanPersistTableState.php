@@ -13,9 +13,9 @@ use Symfony\UX\TwigComponent\Attribute\PostMount;
 use function Sylament\Support\blank;
 
 /**
- * The browsing state a table remembers between visits — sort, search, filters
- * and the per-page choice — read once per mount and written back wherever the
- * state changes.
+ * The browsing state a table remembers between visits — sort, search, the
+ * per-column search terms, filters and the per-page choice — read once per mount
+ * and written back wherever the state changes.
  *
  * The read runs above the filters mount hook and below UX's own query-string
  * seeding, which is the whole precedence rule: the URL wins, the session fills
@@ -54,6 +54,14 @@ trait CanPersistTableState
             }
         }
 
+        if ($table->persistsColumnSearchesInSession() && $this->tableColumnSearches === []) {
+            $storedSearches = $this->readTableSessionState('column_search');
+
+            if (self::isPersistedTableFilterBag($storedSearches)) {
+                $this->tableColumnSearches = $storedSearches;
+            }
+        }
+
         if ($table->persistsSortInSession() && blank($this->tableSort)) {
             $storedSort = $this->readTableSessionState('sort');
 
@@ -63,6 +71,7 @@ trait CanPersistTableState
         }
 
         $this->persistTableSearchInSession();
+        $this->persistTableColumnSearchesInSession();
         $this->persistTableSortInSession();
 
         if (!$table->isPaginated()) {
@@ -114,6 +123,15 @@ trait CanPersistTableState
         }
 
         $this->persistTableStateToSession('search', $this->tableSearch);
+    }
+
+    protected function persistTableColumnSearchesInSession(): void
+    {
+        if (!$this->getTable()->persistsColumnSearchesInSession()) {
+            return;
+        }
+
+        $this->persistTableStateToSession('column_search', $this->tableColumnSearches);
     }
 
     protected function persistTableFiltersInSession(): void

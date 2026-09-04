@@ -11,6 +11,21 @@
   },
   "symfony": {
     "controllers": {
+      "column-manager": {
+        "main": "dist/controllers/column_manager_controller.js",
+        "fetch": "eager",
+        "enabled": true
+      },
+      "editable-cell": {
+        "main": "dist/controllers/editable_cell_controller.js",
+        "fetch": "eager",
+        "enabled": true
+      },
+      "limited-list": {
+        "main": "dist/controllers/limited_list_controller.js",
+        "fetch": "eager",
+        "enabled": true
+      },
       "table": {
         "main": "dist/controllers/table_controller.js",
         "fetch": "eager",

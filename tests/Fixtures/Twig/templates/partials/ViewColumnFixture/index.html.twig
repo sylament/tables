@@ -1,0 +1,11 @@
+<div class="sy-ta-view-fixture">
+    <span class="name">{{ component.getName }}</span>
+    <span class="state">{{ component.getState }}</span>
+    <span class="record">{{ component.getRecord.title }}</span>
+    {%- if badge is defined -%}
+        <span class="badge">{{ badge }}</span>
+    {%- endif -%}
+    {%- if record is defined -%}
+        <span class="record-variable">{{ record.title }}</span>
+    {%- endif -%}
+</div>

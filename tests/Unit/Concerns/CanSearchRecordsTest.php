@@ -383,3 +383,297 @@ it('table-level searchable([...]) reaches a relation path', function (): void {
         ->toContain('EXISTS (SELECT sy_x0.id FROM ' . Song::class . ' sy_x0 JOIN sy_x0.artist sy_x0_0 WHERE sy_x0.id = song.id AND sy_x0_0.name LIKE :sylament_search_0)')
         ->and($query?->getDQLPart('join'))->toBe([]);
 });
+
+it('leaves a hidden column out of the global search group', function (): void {
+    $entityManager = searchableSongs();
+    $configure = fn (bool $isHidden): Closure => fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song'))
+        ->columns([TextColumn::make('title')->searchable()->hidden($isHidden)]);
+
+    $visible = new TableHost($configure(false));
+    $hidden = new TableHost($configure(true));
+
+    $visible->tableSearch = 'Silent';
+    $hidden->tableSearch = 'Silent';
+
+    expect($visible->getFilteredTableQuery()?->getDQL() ?? '')->toContain('LIKE')
+        ->and($hidden->getFilteredTableQuery()?->getDQL() ?? '')->not->toContain('LIKE')
+        ->and($hidden->getFilteredTableQuery()?->getDQLPart('where'))->toBeNull();
+});
+
+it('seeds every individually searchable column, nesting a dotted name', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table->columns([
+        TextColumn::make('title')->searchable(isIndividual: true),
+        TextColumn::make('artist.name')->searchable(isIndividual: true),
+        TextColumn::make('plays')->searchable(),
+    ]));
+
+    $host->mountTableColumnSearches();
+
+    expect($host->tableColumnSearches)->toBe(['title' => '', 'artist' => ['name' => '']]);
+});
+
+it('flattens and trims the bag and keeps the raw value for the input', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table->columns([TextColumn::make('artist.name')->searchable(isIndividual: true)]));
+
+    $host->tableColumnSearches = ['artist' => ['name' => ' Radio ']];
+
+    expect($host->getTableColumnSearches())->toBe(['artist.name' => 'Radio'])
+        ->and($host->getTableColumnSearch('artist.name'))->toBe(' Radio ')
+        ->and($host->getTableColumnSearch('title'))->toBe('');
+});
+
+it('constrains only visible, individually searchable columns, one group per word', function (): void {
+    $entityManager = searchableLibrary();
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song'))
+        ->columns([
+            TextColumn::make('title')->searchable(isIndividual: true),
+            TextColumn::make('plays')->searchable(),
+            TextColumn::make('secret')->searchable(isIndividual: true)->hidden(),
+        ]));
+
+    $host->tableColumnSearches = ['title' => 'air bag', 'plays' => '100', 'secret' => 'x'];
+
+    $dql = $host->getFilteredTableQuery()?->getDQL() ?? '';
+
+    expect(mb_substr_count($dql, 'LIKE'))->toBe(2)
+        ->and($dql)->not->toContain('plays')
+        ->and($dql)->not->toContain('secret');
+});
+
+it('honours the column term-splitting override over the table default', function (): void {
+    $entityManager = searchableLibrary();
+    $configure = fn (bool $split): Closure => fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song'))
+        ->columns([TextColumn::make('title')->searchable(isIndividual: true)->splitIndividualSearchTerms($split)])
+        ->splitSearchTerms(!$split);
+
+    $split = new TableHost($configure(true));
+    $whole = new TableHost($configure(false));
+    $deferring = new TableHost(fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song'))
+        ->columns([TextColumn::make('title')->searchable(isIndividual: true)])
+        ->splitSearchTerms(false));
+
+    $split->tableColumnSearches = ['title' => 'air bag'];
+    $whole->tableColumnSearches = ['title' => 'air bag'];
+    $deferring->tableColumnSearches = ['title' => 'air bag'];
+
+    expect(mb_substr_count($split->getFilteredTableQuery()?->getDQL() ?? '', 'LIKE'))->toBe(2)
+        ->and(mb_substr_count($whole->getFilteredTableQuery()?->getDQL() ?? '', 'LIKE'))->toBe(1)
+        ->and(mb_substr_count($deferring->getFilteredTableQuery()?->getDQL() ?? '', 'LIKE'))->toBe(1);
+});
+
+it('leaves a seeded blank out of the query and out of the chips, splitting or not', function (): void {
+    $entityManager = searchableLibrary();
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song'))
+        ->columns([
+            TextColumn::make('title')->searchable(isIndividual: true),
+            TextColumn::make('artist.name')->searchable(isIndividual: true),
+        ])
+        ->splitSearchTerms(false));
+
+    $host->mountTableColumnSearches();
+
+    expect($host->tableColumnSearches)->toBe(['title' => '', 'artist' => ['name' => '']])
+        ->and($host->getFilteredTableQuery()?->getDQL() ?? '')->not->toContain('LIKE')
+        ->and($host->getFilteredTableQuery()?->getDQLPart('where'))->toBeNull()
+        ->and($host->getTableColumnSearchIndicators())->toBe([]);
+});
+
+it('adds no group for a column whose search query constrains nothing', function (): void {
+    $entityManager = searchableLibrary();
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song'))
+        ->columns([TextColumn::make('title')->searchable(query: fn (): null => null, isIndividual: true)]));
+
+    $host->tableColumnSearches = ['title' => 'Alpha'];
+
+    expect($host->getFilteredTableQuery()?->getDQLPart('where'))->toBeNull();
+});
+
+it('drops a numeric key rather than handing it to the column lookup', function (): void {
+    $entityManager = searchableLibrary();
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(Song::class, 'song'))
+        ->columns([TextColumn::make('title')->searchable(isIndividual: true)]));
+
+    $host->tableColumnSearches = ['0' => 'x', 'title' => 'Alpha'];
+
+    expect($host->hydrateTableColumnSearches(['0' => 'x', 'title' => 'Alpha']))->toBe(['title' => 'Alpha'])
+        ->and($host->getTableColumnSearches())->toBe(['title' => 'Alpha'])
+        ->and(array_keys($host->getTableColumnSearchIndicators()))->toBe(['title'])
+        ->and(mb_substr_count($host->getFilteredTableQuery()?->getDQL() ?? '', 'LIKE'))->toBe(1);
+});
+
+it('hydrates a wire value that is not an array as an empty bag', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table->columns([TextColumn::make('title')->searchable(isIndividual: true)]));
+
+    expect($host->hydrateTableColumnSearches('not-an-array'))->toBe([]);
+});
+
+it('runs the update choreography when the hydrated bag differs from what arrived', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table->columns([TextColumn::make('title')->searchable(isIndividual: true)])->paginated([2]));
+    $host->tablePage = 3;
+
+    $host->hydrateTableColumnSearches(['title' => '']);
+    $host->tableColumnSearches = ['title' => 'air'];
+    $host->afterTableColumnSearchesHydrated();
+
+    expect($host->tablePage)->toBe(1);
+
+    $untouched = new TableHost(fn (Table $table): Table => $table->columns([TextColumn::make('title')->searchable(isIndividual: true)]));
+    $untouched->tablePage = 3;
+
+    $untouched->hydrateTableColumnSearches(['title' => 'air']);
+    $untouched->tableColumnSearches = ['title' => 'air'];
+    $untouched->afterTableColumnSearchesHydrated();
+
+    expect($untouched->tablePage)->toBe(3);
+});
+
+it('keeps the first hydrated bag as the snapshot, so a later update never overwrites it', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table->columns([TextColumn::make('title')->searchable(isIndividual: true)]));
+    $host->tablePage = 3;
+
+    $host->hydrateTableColumnSearches(['title' => '']);
+    $host->hydrateTableColumnSearches(['title' => 'air']);
+    $host->tableColumnSearches = ['title' => 'air'];
+    $host->afterTableColumnSearchesHydrated();
+
+    expect($host->tablePage)->toBe(1);
+});
+
+it('seeds a column that became searchable between requests without reading it as an edit', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table->columns([
+        TextColumn::make('title')->searchable(isIndividual: true),
+        TextColumn::make('artist.name')->searchable(isIndividual: true),
+    ]));
+    $host->tablePage = 3;
+
+    $host->hydrateTableColumnSearches(['title' => '']);
+    $host->tableColumnSearches = ['title' => ''];
+    $host->afterTableColumnSearchesHydrated();
+
+    expect($host->tablePage)->toBe(3)
+        ->and($host->tableColumnSearches)->toBe(['title' => '', 'artist' => ['name' => '']]);
+});
+
+it('casts every leaf to a string on both sides of the compare', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table->columns([TextColumn::make('title')->searchable(isIndividual: true)]));
+    $host->tablePage = 3;
+
+    $host->hydrateTableColumnSearches(['title' => 100]);
+    $host->tableColumnSearches = ['title' => '100'];
+    $host->afterTableColumnSearchesHydrated();
+
+    expect($host->tablePage)->toBe(3)
+        ->and($host->tableColumnSearches)->toBe(['title' => '100']);
+});
+
+it('puts the nested untrimmed bag on the wire rather than the flat trimmed map', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table->columns([TextColumn::make('artist.name')->searchable(isIndividual: true)]));
+
+    $host->tableColumnSearches = ['artist' => ['name' => ' Radio ']];
+
+    expect($host->dehydrateTableColumnSearches(['artist.name' => 'Radio']))->toBe(['artist' => ['name' => ' Radio ']]);
+});
+
+it('labels one chip per column holding a term and skips hidden and blank ones', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table->columns([
+        TextColumn::make('title')->searchable(isIndividual: true),
+        TextColumn::make('artist.name')->searchable(isIndividual: true),
+        TextColumn::make('plays')->searchable(),
+        TextColumn::make('secret')->searchable(isIndividual: true)->hidden(),
+    ]));
+
+    $host->tableColumnSearches = ['title' => ' Air', 'artist' => ['name' => ''], 'plays' => '100', 'secret' => 'x'];
+
+    $indicators = $host->getTableColumnSearchIndicators();
+
+    expect(array_keys($indicators))->toBe(['title'])
+        ->and((string) $indicators['title']->getLabel())->toBe('Title: Air');
+});
+
+it('resets one column or all of them back to a seeded blank, running the choreography each time', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table->columns([
+        TextColumn::make('title')->searchable(isIndividual: true),
+        TextColumn::make('artist.name')->searchable(isIndividual: true),
+    ]));
+
+    $host->tableColumnSearches = ['title' => 'a', 'artist' => ['name' => 'b']];
+    $host->tablePage = 3;
+
+    $host->resetTableColumnSearch('artist.name');
+
+    expect($host->tableColumnSearches)->toBe(['title' => 'a', 'artist' => ['name' => '']])
+        ->and($host->tablePage)->toBe(1);
+
+    $host->tablePage = 3;
+
+    $host->resetTableColumnSearches();
+
+    expect($host->tableColumnSearches)->toBe(['title' => '', 'artist' => ['name' => '']])
+        ->and($host->tablePage)->toBe(1);
+});
+
+it('refuses to reset a column the table does not search individually', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table->columns([
+        TextColumn::make('title')->searchable(isIndividual: true),
+        TextColumn::make('plays')->searchable(),
+    ]));
+
+    $host->tableColumnSearches = ['title' => 'a'];
+    $host->tablePage = 3;
+
+    $host->resetTableColumnSearch('plays');
+    $host->resetTableColumnSearch('title.x');
+    $host->resetTableColumnSearch('invented');
+
+    expect($host->tableColumnSearches)->toBe(['title' => 'a'])
+        ->and($host->tablePage)->toBe(3);
+});
+
+it('clears the selection on a per-column change exactly where the table says so', function (): void {
+    $configure = fn (bool $deselects): Closure => fn (Table $table): Table => $table
+        ->columns([TextColumn::make('title')->searchable(isIndividual: true)])
+        ->deselectAllRecordsWhenFiltered($deselects);
+
+    $deselecting = new TableHost($configure(true));
+    $keeping = new TableHost($configure(false));
+
+    foreach ([$deselecting, $keeping] as $host) {
+        $host->selectedTableRecordKeys = ['1'];
+        $host->tableColumnSearches = ['title' => 'a'];
+        $host->resetTableColumnSearch('title');
+    }
+
+    expect($deselecting->selectedTableRecordKeys)->toBe([])
+        ->and($keeping->selectedTableRecordKeys)->toBe(['1']);
+});
+
+it('flushes the cached records when a per-column term changes', function (): void {
+    $fetches = 0;
+    $host = new TableHost(function (Table $table) use (&$fetches): Table {
+        return $table
+            ->columns([TextColumn::make('title')->searchable(isIndividual: true)])
+            ->records(function () use (&$fetches): array {
+                $fetches++;
+
+                return [];
+            });
+    });
+
+    $host->tableColumnSearches = ['title' => 'Air'];
+    $host->getTableRecords();
+    $host->getTableRecords();
+
+    expect($fetches)->toBe(1);
+
+    $host->resetTableColumnSearch('title');
+    $host->getTableRecords();
+
+    expect($fetches)->toBe(2);
+});

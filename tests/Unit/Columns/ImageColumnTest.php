@@ -101,8 +101,8 @@ it('resolves one item per state value with urls and alt text', function (): void
         ->getStateItems();
 
     expect($items)->toBe([
-        ['url' => 'https://example.com/a.png', 'alt' => 'alt:https://example.com/a.png'],
-        ['url' => 'https://example.com/b.png', 'alt' => 'alt:https://example.com/b.png'],
+        ['url' => 'https://example.com/a.png', 'alt' => 'alt:https://example.com/a.png', 'state' => 'https://example.com/a.png'],
+        ['url' => 'https://example.com/b.png', 'alt' => 'alt:https://example.com/b.png', 'state' => 'https://example.com/b.png'],
     ]);
 });
 
@@ -126,12 +126,12 @@ it('renders nothing for a blank state without a default image', function (): voi
 
 it('renders the default image for a blank state', function (): void {
     expect(ImageColumn::make('avatar')->record(['avatar' => null])->defaultImageUrl('/images/placeholder.png')->getStateItems())
-        ->toBe([['url' => '/images/placeholder.png', 'alt' => null]]);
+        ->toBe([['url' => '/images/placeholder.png', 'alt' => null, 'state' => null]]);
 });
 
 it('falls back to the default image for an unresolvable item', function (): void {
     expect(ImageColumn::make('avatar')->record(['avatar' => 'https://example.com/%09a.png'])->defaultImageUrl('/images/placeholder.png')->getStateItems())
-        ->toBe([['url' => '/images/placeholder.png', 'alt' => null]]);
+        ->toBe([['url' => '/images/placeholder.png', 'alt' => null, 'state' => 'https://example.com/%09a.png']]);
 });
 
 it('mirrors the text size handling for the remaining text', function (): void {

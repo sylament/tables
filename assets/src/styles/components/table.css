@@ -24,7 +24,100 @@
     }
 
     & .sy-ta-header-cell {
-        @apply px-3 py-3.5 text-start text-sm font-semibold whitespace-nowrap text-gray-950 sm:first-of-type:ps-6 sm:last-of-type:pe-6 dark:text-white;
+        @apply px-3 py-3.5 text-start text-sm font-semibold text-gray-950 sm:first-of-type:ps-6 sm:last-of-type:pe-6 dark:text-white;
+
+        &.sy-growable {
+            @apply w-full;
+        }
+
+        &.sy-wrapped {
+            @apply whitespace-normal;
+        }
+
+        &:not(.sy-wrapped) {
+            @apply whitespace-nowrap;
+        }
+
+        &.sy-align-center {
+            @apply text-center;
+
+            & .sy-ta-header-cell-sort-btn {
+                @apply justify-center;
+            }
+        }
+
+        &.sy-align-end {
+            @apply text-end;
+
+            & .sy-ta-header-cell-sort-btn {
+                @apply justify-end;
+            }
+        }
+
+        &.sy-align-left {
+            @apply text-left;
+
+            & .sy-ta-header-cell-sort-btn {
+                @apply justify-start rtl:flex-row-reverse;
+            }
+        }
+
+        &.sy-align-right {
+            @apply text-right;
+
+            & .sy-ta-header-cell-sort-btn {
+                @apply justify-end rtl:flex-row-reverse;
+            }
+        }
+
+        &.sy-align-justify,
+        &.sy-align-between {
+            @apply text-justify;
+
+            & .sy-ta-header-cell-sort-btn {
+                @apply justify-between;
+            }
+        }
+
+        &.sm\:sy-ta-hidden {
+            @apply sm:hidden;
+        }
+
+        &.md\:sy-ta-hidden {
+            @apply md:hidden;
+        }
+
+        &.lg\:sy-ta-hidden {
+            @apply lg:hidden;
+        }
+
+        &.xl\:sy-ta-hidden {
+            @apply xl:hidden;
+        }
+
+        &.\32xl\:sy-ta-hidden {
+            @apply 2xl:hidden;
+        }
+
+        &.sm\:sy-ta-visible {
+            @apply hidden sm:table-cell;
+        }
+
+        &.md\:sy-ta-visible {
+            @apply hidden md:table-cell;
+        }
+
+        &.lg\:sy-ta-visible {
+            @apply hidden lg:table-cell;
+        }
+
+        &.xl\:sy-ta-visible {
+            @apply hidden xl:table-cell;
+        }
+
+        &.\32xl\:sy-ta-visible {
+            @apply hidden 2xl:table-cell;
+        }
 
         &.sy-ta-header-cell-sorted {
             & .sy-icon {
@@ -103,8 +196,109 @@
             @apply flex w-full justify-start text-start disabled:pointer-events-none;
         }
 
+        &.sy-vertical-align-start {
+            @apply align-top;
+        }
+
+        &.sy-vertical-align-end {
+            @apply align-bottom;
+        }
+
+        &.sy-align-start {
+            @apply text-start;
+        }
+
+        &.sy-align-center {
+            @apply text-center;
+        }
+
+        &.sy-align-end {
+            @apply text-end;
+        }
+
+        &.sy-align-left {
+            @apply text-left;
+        }
+
+        &.sy-align-right {
+            @apply text-right;
+        }
+
+        &.sy-align-justify,
+        &.sy-align-between {
+            @apply text-justify;
+        }
+
+        &.sm\:sy-ta-hidden {
+            @apply sm:hidden;
+        }
+
+        &.md\:sy-ta-hidden {
+            @apply md:hidden;
+        }
+
+        &.lg\:sy-ta-hidden {
+            @apply lg:hidden;
+        }
+
+        &.xl\:sy-ta-hidden {
+            @apply xl:hidden;
+        }
+
+        &.\32xl\:sy-ta-hidden {
+            @apply 2xl:hidden;
+        }
+
+        &.sm\:sy-ta-visible {
+            @apply hidden sm:table-cell;
+        }
+
+        &.md\:sy-ta-visible {
+            @apply hidden md:table-cell;
+        }
+
+        &.lg\:sy-ta-visible {
+            @apply hidden lg:table-cell;
+        }
+
+        &.xl\:sy-ta-visible {
+            @apply hidden xl:table-cell;
+        }
+
+        &.\32xl\:sy-ta-visible {
+            @apply hidden 2xl:table-cell;
+        }
+
+        & .sy-ta-placeholder {
+            @apply text-sm leading-6 text-gray-400 dark:text-gray-500;
+        }
+
+        &.sy-ta-individual-search-cell {
+            @apply min-w-48 px-3 py-2;
+        }
+
+        /* The band's two label cells carry their own padding, because a value
+           cell takes its own from the summarizer element inside it and a label
+           cell has no such child. */
+        &.sy-ta-summary-row-heading-cell {
+            @apply px-3 py-4 text-sm font-medium text-gray-950 sm:first:ps-6 sm:last:pe-6 dark:text-white;
+        }
+
+        &.sy-ta-summary-header-cell {
+            @apply px-3 py-2 text-sm font-medium whitespace-nowrap text-gray-950 sm:first:ps-6 dark:text-white;
+        }
+
         &:has(.sy-ta-actions) {
             @apply px-3 py-4 whitespace-nowrap first-of-type:ps-4 last-of-type:pe-4 sm:first-of-type:ps-6 sm:last-of-type:pe-6;
+        }
+    }
+
+    & .sy-ta-col-has-column-url .sy-ta-text-item {
+        @apply hover:underline focus-visible:underline;
+
+        & .sy-icon,
+        & > .sy-badge {
+            @apply hover:no-underline focus-visible:no-underline;
         }
     }
 

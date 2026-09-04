@@ -1,0 +1,62 @@
+.sy-ta-grouping-settings {
+    & .sy-dropdown .sy-ta-grouping-settings-fields {
+        @apply grid gap-y-6 p-6;
+    }
+
+    & > .sy-ta-grouping-settings-fields {
+        @apply hidden items-center gap-x-3 sm:flex;
+    }
+
+    /* The two copies swap at `sm`, unless the table asked for the dropdown everywhere — which is
+       the whole of vendor's conditional `sm:fi-hidden`, without a global utility only this one
+       caller would ever want. */
+    &:not(.sy-ta-grouping-settings-dropdown-on-desktop) > .sy-dropdown {
+        @apply sm:hidden;
+    }
+
+    & .sy-ta-grouping-settings-field {
+        @apply grid gap-y-2;
+    }
+
+    & .sy-ta-grouping-settings-field-label {
+        @apply text-sm leading-6 font-medium text-gray-950 dark:text-white;
+    }
+}
+
+.sy-ta {
+    & .sy-ta-row.sy-collapsed {
+        @apply hidden;
+    }
+
+    & .sy-ta-group-header-row > td {
+        @apply bg-gray-50 dark:bg-white/5;
+    }
+
+    & .sy-ta-group-header-cell {
+        @apply px-3 sm:first-of-type:ps-6 sm:last-of-type:pe-6;
+    }
+
+    & .sy-ta-group-header {
+        @apply flex w-full items-center gap-x-3 py-2;
+
+        &.sy-collapsible {
+            @apply cursor-pointer;
+
+            &.sy-collapsed .sy-icon-btn {
+                @apply -rotate-180;
+            }
+        }
+
+        & .sy-ta-group-heading {
+            @apply text-sm font-medium text-gray-950 dark:text-white;
+        }
+
+        & .sy-ta-group-description {
+            @apply text-sm text-gray-500 dark:text-gray-400;
+        }
+    }
+
+    & .sy-ta-group-selection-cell {
+        @apply w-1 px-3 first-of-type:ps-4 last-of-type:pe-4 sm:first-of-type:ps-6 sm:last-of-type:pe-6;
+    }
+}

@@ -10,6 +10,7 @@ use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
 use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Artist;
 use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Song;
 use Sylament\Tables\Tests\Fixtures\Doctrine\EntityManagerFactory;
+use Sylament\Tables\Tests\Fixtures\Doctrine\RecordingMiddleware;
 
 /*
  * Covers the query half of the selection — the constraint `getSelectedTableRecordsQuery()`
@@ -248,3 +249,121 @@ it('counts the filtered query where simple pagination carries no total', functio
     expect($host->getTableRecords()->getTotalRecordCount())->toBeNull()
         ->and($host->getAllSelectableTableRecordsCount())->toBe(3);
 });
+
+/*
+ * The grouped enumeration behind a group header's checkbox: the keys of one
+ * group, taken from the whole filtered set or from the page alone, and keyed
+ * through `Group::getStringKey()` on both lanes — the reader the header rendered
+ * its own key with, so the two cannot disagree.
+ */
+
+/**
+ * @param (Closure(Table): Table)|null $configure
+ */
+function groupedSelectionHost(EntityManager $entityManager, ?Closure $configure = null): TableHost
+{
+    return selectionHost($entityManager, function (Table $table) use ($configure): Table {
+        $table->groups(['plays', 'artist.name'])->paginated([2]);
+
+        return $configure instanceof Closure ? $configure($table) : $table;
+    });
+}
+
+it('enumerates every key of one group across the pages', function (): void {
+    $host = groupedSelectionHost(selectableSongs());
+    $host->tableGrouping = 'artist.name';
+
+    expect($host->getGroupedSelectableTableRecordKeys('Radiohead'))->toBe(['1', '2'])
+        ->and($host->getGroupedSelectableTableRecordKeys(null))->toBe(['3']);
+});
+
+it('enumerates only the page of a group where selection is page-only', function (): void {
+    $host = groupedSelectionHost(
+        selectableSongs(),
+        fn (Table $table): Table => $table->paginated([1])->selectCurrentPageOnly(),
+    );
+    $host->tableGrouping = 'artist.name';
+
+    // Radiohead holds two songs across the filtered set and one on this page,
+    // and the group whose key is blank holds none of it.
+    expect(array_keys($host->getTable()->getRecords()))->toBe([1])
+        ->and($host->getGroupedSelectableTableRecordKeys('Radiohead'))->toBe(['1'])
+        ->and($host->getGroupedSelectableTableRecordKeys(null))->toBe([]);
+});
+
+it('re-applies the selectability callback to a grouped enumeration on both lanes', function (): void {
+    $configure = static fn (Table $table): Table => $table->checkIfRecordIsSelectableUsing(
+        static fn (Song $record): bool => $record->getId() !== 2,
+    );
+
+    $wholeSet = groupedSelectionHost(selectableSongs(), $configure);
+    $wholeSet->tableGrouping = 'artist.name';
+
+    $pageOnly = groupedSelectionHost(
+        selectableSongs(),
+        static fn (Table $table): Table => $configure($table)->selectCurrentPageOnly(),
+    );
+    $pageOnly->tableGrouping = 'plays';
+
+    expect($wholeSet->getGroupedSelectableTableRecordKeys('Radiohead'))->toBe(['1'])
+        ->and($pageOnly->getGroupedSelectableTableRecordKeys('20'))->toBe([]);
+});
+
+it('enumerates nothing for a group the table does not offer, or for none at all', function (): void {
+    $grouped = groupedSelectionHost(selectableSongs());
+    $grouped->tableGrouping = 'artist.name';
+
+    $ungrouped = groupedSelectionHost(selectableSongs());
+
+    expect($grouped->getGroupedSelectableTableRecordKeys('Nobody'))->toBe([])
+        ->and($ungrouped->getGroupedSelectableTableRecordKeys('Radiohead'))->toBe([]);
+});
+
+it('memoises a grouped enumeration per group for the request', function (): void {
+    $recorder = new RecordingMiddleware();
+    $entityManager = EntityManagerFactory::create($recorder);
+    $radiohead = new Artist(1, 'Radiohead');
+
+    EntityManagerFactory::seed(
+        $entityManager,
+        $radiohead,
+        new Song(1, 'Alpha', 10, $radiohead),
+        new Song(2, 'Beta', 20, $radiohead),
+    );
+
+    $host = groupedSelectionHost($entityManager);
+    $host->tableGrouping = 'artist.name';
+
+    $recorder->reset();
+
+    $host->getGroupedSelectableTableRecordKeys('Radiohead');
+    $host->getGroupedSelectableTableRecordKeys('Radiohead');
+
+    expect($recorder->statements())->toHaveCount(1)
+        ->and($host->getGroupedSelectableTableRecordKeys('Radiohead'))->toBe(['1', '2']);
+});
+
+it('forgets a grouped enumeration wherever the selection memo is dropped', function (string $method): void {
+    $recorder = new RecordingMiddleware();
+    $entityManager = EntityManagerFactory::create($recorder);
+    $radiohead = new Artist(1, 'Radiohead');
+
+    EntityManagerFactory::seed($entityManager, $radiohead, new Song(1, 'Alpha', 10, $radiohead));
+
+    $host = groupedSelectionHost($entityManager);
+    $host->tableGrouping = 'artist.name';
+
+    $host->getGroupedSelectableTableRecordKeys('Radiohead');
+
+    $host->{$method}();
+
+    // The clearer runs queries of its own, so the count is taken after it and
+    // the assertion is that the *next* read adds to it rather than answering
+    // from a memo the clearer should have dropped.
+    $afterClearing = count($recorder->statements());
+
+    $host->getGroupedSelectableTableRecordKeys('Radiohead');
+
+    expect(count($recorder->statements()))->toBeGreaterThan($afterClearing)
+        ->and($host->getGroupedSelectableTableRecordKeys('Radiohead'))->toBe(['1']);
+})->with(['flushCachedTableRecords', 'deselectAllTableRecords', 'selectAllTableRecords']);

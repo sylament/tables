@@ -107,9 +107,13 @@ trait CanPaginateRecords
         return $this->evaluate($this->paginationPageOptions) ?? [5, 10, 25, 50];
     }
 
+    /**
+     * A `groupsOnly()` table renders one row per group and paginates none of
+     * them, so the flag is off there whatever the declaration says.
+     */
     public function isPaginated(): bool
     {
-        return (bool) $this->evaluate($this->isPaginated);
+        return (bool) $this->evaluate($this->isPaginated) && !$this->isGroupsOnly();
     }
 
     public function isPaginatedWhileReordering(): bool

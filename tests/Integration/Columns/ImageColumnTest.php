@@ -9,6 +9,7 @@ use Sylament\Tables\Columns\ImageColumn;
 use Sylament\Tables\Table;
 use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
 use Symfony\Component\DomCrawler\Crawler;
+use Twig\Markup;
 
 use function Sylament\Tables\Tests\renderToHtml;
 
@@ -64,7 +65,70 @@ it('renders an empty element for a blank state', function (): void {
     $cell = imageCell(ImageColumn::make('photo'), null);
 
     expect($cell->count())->toBe(1)
-        ->and($cell->filter('img')->count())->toBe(0);
+        ->and($cell->filter('img')->count())->toBe(0)
+        ->and($cell->filter('p.sy-ta-placeholder')->count())->toBe(0);
+});
+
+it('renders the placeholder paragraph and the empty tooltip for a blank state', function (): void {
+    $cell = imageCell(ImageColumn::make('photo')->placeholder('No cover')->emptyTooltip('Nothing uploaded'), null);
+
+    expect($cell->filter('p.sy-ta-placeholder')->text())->toBe('No cover')
+        ->and($cell->attr('title'))->toBe('Nothing uploaded');
+});
+
+it('flattens a markup empty tooltip to text', function (): void {
+    $cell = imageCell(ImageColumn::make('photo')->emptyTooltip(new Markup('<b>Nothing</b> here', 'UTF-8')), null);
+
+    expect($cell->attr('title'))->toBe('Nothing here');
+});
+
+it('lets the default image beat the placeholder', function (): void {
+    $cell = imageCell(ImageColumn::make('photo')->placeholder('No cover')->defaultImageUrl('/images/placeholder.png'), null);
+
+    expect($cell->filter('p.sy-ta-placeholder')->count())->toBe(0)
+        ->and($cell->filter('img')->attr('src'))->toBe('/images/placeholder.png');
+});
+
+it('marks the root inline and spreads the wrapper extra attributes', function (): void {
+    $cell = imageCell(ImageColumn::make('photo')->inline()->extraAttributes(['data-probe' => 'yes']), 'https://example.com/a.png');
+
+    expect($cell->attr('class'))->toContain('sy-inline')
+        ->and($cell->attr('data-probe'))->toBe('yes');
+});
+
+it('titles each image with the tooltip its own state resolves', function (): void {
+    $cell = imageCell(
+        ImageColumn::make('photo')->tooltip(fn (mixed $state): string => 'Open ' . $state),
+        ['https://a.example/1.png', 'https://a.example/2.png'],
+    );
+
+    expect($cell->filter('img')->each(fn (Crawler $img): ?string => $img->attr('title')))
+        ->toBe(['Open https://a.example/1.png', 'Open https://a.example/2.png']);
+});
+
+it('wraps each image in a state-based anchor and opens it in the configured tab', function (): void {
+    $cell = imageCell(
+        ImageColumn::make('photo')->url(fn (mixed $state): string => '/view?src=' . $state, shouldOpenInNewTab: true),
+        ['https://a.example/1.png', 'https://a.example/2.png'],
+    );
+
+    $anchors = $cell->filter('a');
+
+    expect($anchors->count())->toBe(2)
+        ->and($anchors->each(fn (Crawler $anchor): ?string => $anchor->attr('href')))
+        ->toBe(['/view?src=https://a.example/1.png', '/view?src=https://a.example/2.png'])
+        ->and($anchors->first()->attr('target'))->toBe('_blank')
+        ->and($anchors->first()->filter('img')->count())->toBe(1);
+});
+
+it('leaves an image unwrapped when the state-based url refuses it', function (): void {
+    $cell = imageCell(
+        ImageColumn::make('photo')->url(fn (mixed $state): string => 'javascript:alert(1)'),
+        'https://a.example/1.png',
+    );
+
+    expect($cell->filter('a')->count())->toBe(0)
+        ->and($cell->filter('img')->count())->toBe(1);
 });
 
 it('renders the default image for a blank state', function (): void {

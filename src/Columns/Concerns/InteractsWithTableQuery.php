@@ -6,15 +6,12 @@ namespace Sylament\Tables\Columns\Concerns;
 
 use Closure;
 use Doctrine\ORM\Query\Expr\Orx;
-use Doctrine\ORM\Query\Expr\Select;
 use Doctrine\ORM\QueryBuilder;
 use Stringable;
 use Sylament\Tables\Query\AggregateDeclaration;
 use Sylament\Tables\Query\AggregateQuery;
 use Sylament\Tables\Query\ColumnPathResolver;
 use Sylament\Tables\Query\RelationJoiner;
-use Sylament\Tables\Query\RelationPathResolver;
-use Sylament\Tables\Query\ResolvedRelationPath;
 use Sylament\Tables\Query\SearchConstraint;
 
 trait InteractsWithTableQuery
@@ -81,59 +78,12 @@ trait InteractsWithTableQuery
     /**
      * Fetch-joins the relation this column reads through, so every cell of the
      * page is answered from the page query rather than by a lazy load per row.
-     * A no-op unless the name resolves to a chain of to-one hops. Only the hops
-     * are read, never the field at the end, so a name that sorting or searching
-     * would refuse still renders — joined where its hops resolve, lazy where
-     * they do not.
+     * The mechanism is shared with a `date()`-free grouping's own eager load,
+     * which crosses the same paths under a different reader.
      */
     public function applyEagerLoading(QueryBuilder $query): QueryBuilder
     {
-        $analysed = RelationPathResolver::tryAnalyseQueryPath($query, $this->getName());
-
-        if (!$analysed instanceof ResolvedRelationPath || !$analysed->isRelationPath() || $analysed->hasToManyHop()) {
-            return $query;
-        }
-
-        $parentAlias = $query->getRootAliases()[0] ?? null;
-
-        if ($parentAlias === null) {
-            return $query;
-        }
-
-        foreach ($analysed->hops as $hop) {
-            $parentAlias = RelationJoiner::ensureJoined($query, $parentAlias, [$hop]);
-
-            if (!in_array($parentAlias, self::selectedAliases($query), true)) {
-                $query->addSelect($parentAlias);
-            }
-        }
-
-        return $query;
-    }
-
-    /**
-     * Every expression the builder selects, so a hop already fetched — by the
-     * caller's own query or by a column that crosses the same relation — is not
-     * selected twice.
-     *
-     * @return list<string>
-     */
-    private static function selectedAliases(QueryBuilder $query): array
-    {
-        $part = $query->getDQLPart('select');
-        $selected = [];
-
-        foreach (is_array($part) ? $part : [] as $select) {
-            if (!$select instanceof Select) {
-                continue;
-            }
-
-            foreach ($select->getParts() as $expression) {
-                $selected[] = (string) $expression;
-            }
-        }
-
-        return $selected;
+        return RelationJoiner::fetchJoinPath($query, $this->getName());
     }
 
     /**

@@ -232,6 +232,22 @@ it('clears the search and the page alongside every removable filter', function (
         ->and($host->tableFilters)->toBe(['featured' => ['isActive' => false]]);
 });
 
+it('clears every per-column term alongside the global one', function (): void {
+    $host = filtersHost(fn (Table $table): Table => $table
+        ->columns([TextColumn::make('title')->searchable(isIndividual: true)])
+        ->filters([Filter::make('featured')]));
+
+    $host->getTableFiltersForm();
+    $host->tableSearch = 'beta';
+    $host->tableColumnSearches = ['title' => 'Air'];
+    $host->tableDeferredFilters = ['featured' => ['isActive' => true]];
+
+    $host->removeTableFilters();
+
+    expect($host->tableSearch)->toBe('')
+        ->and($host->tableColumnSearches)->toBe(['title' => '']);
+});
+
 it('restores field defaults rather than reset state when the form is reset', function (): void {
     $host = filtersHost(fn (Table $table): Table => $table->filters([
         Filter::make('featured')->default(),

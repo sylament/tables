@@ -1,5 +1,9 @@
 .sy-ta-image {
-    @apply flex w-full items-center gap-1.5 px-3 py-4;
+    @apply flex w-full items-center gap-1.5;
+
+    &:not(.sy-inline) {
+        @apply px-3 py-4;
+    }
 
     & img {
         @apply max-w-none object-cover object-center;

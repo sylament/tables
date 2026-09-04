@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Sylament\Tables\Columns\TextColumn;
 use Sylament\Tables\Filters\Filter;
 use Sylament\Tables\Filters\FilterIndicator;
 use Sylament\Tables\Filters\Indicator;
@@ -91,4 +92,26 @@ it('carries a non-removable indicator through unchanged', function (): void {
 
     expect($indicators)->toHaveCount(1)
         ->and($indicators[0]->indicator->isRemovable())->toBeFalse();
+});
+
+it('slots the column-search chips between the global chip and the filters, keyed by column', function (): void {
+    $host = indicatorHost(
+        static fn (Table $table): Table => $table
+            ->columns([TextColumn::make('title')->searchable(isIndividual: true)])
+            ->filters([Filter::make('isPublished')]),
+        ['isPublished' => ['isActive' => true]],
+    );
+
+    $host->tableSearch = 'moon';
+    $host->tableColumnSearches = ['title' => ' Air '];
+
+    $indicators = $host->getTable()->getFilterIndicators();
+
+    expect($indicators)->toHaveCount(3)
+        ->and($indicators[0]->removeAction)->toBe('resetTableSearch')
+        ->and($indicators[1])->toBeInstanceOf(FilterIndicator::class)
+        ->and((string) $indicators[1]->indicator->getLabel())->toBe('Title: Air')
+        ->and($indicators[1]->removeAction)->toBe('resetTableColumnSearch')
+        ->and($indicators[1]->removeArguments)->toBe(['column' => 'title'])
+        ->and($indicators[2]->removeAction)->toBe('removeTableFilter');
 });

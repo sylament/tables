@@ -1,0 +1,17 @@
+{% set label = component.getLabel %}
+
+<div {{ attrs({class: 'sy sy-ta-values-summary'}, component.getExtraAttributes) }}>
+    {%- if label is filled -%}
+        <span {{ attrs({
+            class: classes('sy-ta-values-summary-label', {'sy-sr-only': component.isLabelHidden}),
+        }) }}>{{ label }}</span>
+    {%- endif -%}
+
+    {%- if state is not empty -%}
+        <ul {{ attrs({class: component.isBulleted ? 'sy-bulleted' : null}) }}>
+            {%- for value in state -%}
+                <li>{{ component.formatState(value) }}</li>
+            {%- endfor -%}
+        </ul>
+    {%- endif -%}
+</div>

@@ -1,41 +1,70 @@
 {% set items = component.getStateItems %}
+{% set placeholder = component.getPlaceholder %}
+{% set emptyTooltip = component.getEmptyTooltip %}
 {% set isStacked = component.isStacked %}
 {% set ring = isStacked ? component.getRing : null %}
 {% set overlap = isStacked ? component.getOverlap ?? 2 : null %}
 {% set remainingCount = component.getStateOverLimitCount %}
 {% set showRemainingText = remainingCount > 0 and component.hasLimitedRemainingText %}
+{% set shouldOpenUrlInNewTab = component.shouldOpenUrlInNewTab %}
 {% set dimensionStyles = [
     'height: ' ~ height,
     width ? 'width: ' ~ width : null,
 ] %}
+{% set rootClasses = [
+    'sy',
+    'sy-ta-image',
+    component.getAlignmentClass,
+    component.isInline ? 'sy-inline' : null,
+] %}
 
-<div {{ attrs({
-    class: [
-        'sy',
-        'sy-ta-image',
-        component.getAlignmentClass,
-        component.isCircular ? 'sy-circular' : null,
-        component.canWrap ? 'sy-wrapped' : null,
-        isStacked ? 'sy-stacked' : null,
-        ring is not null ? 'sy-ta-image-ring sy-ta-image-ring-' ~ ring : null,
-        overlap ? 'sy-ta-image-overlap-' ~ overlap : null,
-    ],
-}) }}>
-    {%- for item in items -%}
-        <img {{ attrs({
-            alt: item.alt ?? '',
-            src: item.url ?? '',
-            style: dimensionStyles,
-        }, component.getExtraImgAttributes) }} />
-    {%- endfor -%}
+{% if items is empty %}
+    <div {{ attrs({
+        class: rootClasses,
+        title: (emptyTooltip is markup ? emptyTooltip|striptags : emptyTooltip) ?: null,
+    }, component.getExtraAttributes) }}>
+        {%- if placeholder is not empty -%}
+            <p class="sy-ta-placeholder">{{ placeholder }}</p>
+        {%- endif -%}
+    </div>
+{% else %}
+    <div {{ attrs({
+        class: [
+            ...rootClasses,
+            component.isCircular ? 'sy-circular' : null,
+            component.canWrap ? 'sy-wrapped' : null,
+            isStacked ? 'sy-stacked' : null,
+            ring is not null ? 'sy-ta-image-ring sy-ta-image-ring-' ~ ring : null,
+            overlap ? 'sy-ta-image-overlap-' ~ overlap : null,
+        ],
+    }, component.getExtraAttributes) }}>
+        {%- for item in items -%}
+            {%- set itemTooltip = component.getTooltip(item.state) -%}
+            {%- set itemUrl = component.getUrl(item.state) -%}
+            {%- set image -%}
+                <img {{ attrs({
+                    alt: item.alt ?? '',
+                    src: item.url ?? '',
+                    title: (itemTooltip is markup ? itemTooltip|striptags : itemTooltip) ?: null,
+                    style: dimensionStyles,
+                }, component.getExtraImgAttributes) }} />
+            {%- endset -%}
 
-    {%- if showRemainingText -%}
-        <div {{ attrs({
-            class: [
-                'sy-ta-image-limited-remaining-text',
-                component.getLimitedRemainingTextSizeClass,
-            ],
-            style: dimensionStyles,
-        }) }}>+{{ remainingCount }}</div>
-    {%- endif -%}
-</div>
+            {%- if itemUrl -%}
+                <a {{ attrs({href: itemUrl, target: shouldOpenUrlInNewTab ? '_blank' : null}) }}>{{ image }}</a>
+            {%- else -%}
+                {{- image -}}
+            {%- endif -%}
+        {%- endfor -%}
+
+        {%- if showRemainingText -%}
+            <div {{ attrs({
+                class: [
+                    'sy-ta-image-limited-remaining-text',
+                    component.getLimitedRemainingTextSizeClass,
+                ],
+                style: dimensionStyles,
+            }) }}>+{{ remainingCount }}</div>
+        {%- endif -%}
+    </div>
+{% endif %}

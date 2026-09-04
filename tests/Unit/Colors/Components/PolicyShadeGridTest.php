@@ -6,6 +6,7 @@ namespace Sylament\Tables\Tests\Unit\Colors\Components;
 
 use Sylament\Support\Colors\Color;
 use Sylament\Support\Colors\ColorManager;
+use Sylament\Tables\Colors\Components\IconColumnComponent\IconComponent as IconColumnIconComponent;
 use Sylament\Tables\Colors\Components\TextColumnComponent\ItemComponent;
 use Sylament\Tables\Colors\Components\TextColumnComponent\ItemComponent\IconComponent;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -62,6 +63,11 @@ function textColumnStylesheet(): string
     return stylesheet(dirname(__DIR__, 4) . '/assets/src/styles/components/text-column.css');
 }
 
+function iconColumnStylesheet(): string
+{
+    return stylesheet(dirname(__DIR__, 4) . '/assets/src/styles/components/icon-column.css');
+}
+
 /**
  * @param array<int, string> $palette
  * @return array{ColorManager, list<string>} the manager holding the registered palette, and the
@@ -72,7 +78,11 @@ function emittedClasses(string $policy, array $palette): array
     $colors = new ColorManager(new ContainerBuilder());
     $colors->register(['brand' => $palette]);
 
-    $component = $policy === ItemComponent::class ? new ItemComponent($colors) : new IconComponent();
+    $component = match ($policy) {
+        ItemComponent::class => new ItemComponent($colors),
+        IconColumnIconComponent::class => new IconColumnIconComponent($colors),
+        default => new IconComponent(),
+    };
 
     return [$colors, $colors->getComponentClasses($component, 'brand')];
 }
@@ -87,6 +97,31 @@ function itemShadeClasses(array $palette): array
     [, $classes] = emittedClasses(ItemComponent::class, $palette);
 
     return array_values(array_diff($classes, ['sy-color', 'sy-color-brand']));
+}
+
+/**
+ * @param array<int, string> $palette
+ * @return list<string> the icon column policy's emitted classes with the two carriers removed
+ */
+function iconColumnShadeClasses(array $palette): array
+{
+    [, $classes] = emittedClasses(IconColumnIconComponent::class, $palette);
+
+    return array_values(array_diff($classes, ['sy-color', 'sy-color-brand']));
+}
+
+/**
+ * @return list<string> the `--sy-` slot variables the coloured icon-column rule reads
+ */
+function iconColumnSlotVariablesRead(): array
+{
+    if (preg_match('/&\.sy-color\s*\{(?<declarations>[^}]*)\}/', iconColumnStylesheet(), $rule) !== 1) {
+        throw new UnexpectedValueException('No `&.sy-color` rule in components/icon-column.css — the coloured-icon branch has moved or gone.');
+    }
+
+    preg_match_all('/--sy-[a-z-]+/', $rule['declarations'], $variables);
+
+    return $variables[0];
 }
 
 /**
@@ -168,6 +203,43 @@ it('emits only the palette swap for the icon', function (array $palette): void {
     [, $classes] = emittedClasses(IconComponent::class, $palette);
 
     expect($classes)->toBe(['sy-color', 'sy-color-brand']);
+})->with('adversarial palettes');
+
+/**
+ * The icon column's policy is the third shape in this directory and the only one that is both
+ * `HasDefaultGrayColor` *and* resolves a map: the shipped grey (`text-gray-400 dark:text-gray-500`
+ * in `icon-column.css`) is what `gray` must fall through to, while every other palette resolves
+ * two slots the `&.sy-color` branch reads. Both halves fail in silence — a map added to
+ * `TextColumnComponent\ItemComponent\IconComponent`'s shape paints a colour the column was told
+ * not to take, and a map removed from this one leaves `text-(--sy-text)` unset — so both are
+ * pinned here, over the adversarial palettes the item policy is measured against.
+ */
+it('resolves shades for a named colour on the icon column and nothing at all for gray', function (array $palette): void {
+    $colors = new ColorManager(new ContainerBuilder());
+    $colors->register(['brand' => $palette]);
+
+    expect($colors->getComponentClasses(new IconColumnIconComponent($colors), 'gray'))->toBe([])
+        ->and(iconColumnShadeClasses($palette))->not->toBeEmpty();
+})->with('adversarial palettes');
+
+/**
+ * The icon column's half of the same two-way link the item's case pins: a slot the policy resolves
+ * and the rule never reads is a shade computed for nothing, and a variable the rule reads and no
+ * class sets is a declaration the browser drops, leaving the icon in the stylesheet's grey with
+ * nothing in the console.
+ */
+it('sets exactly the slot variables icon-column.css reads', function (array $palette): void {
+    $read = iconColumnSlotVariablesRead();
+    $set = slotVariablesSetBy(iconColumnShadeClasses($palette));
+
+    sort($read);
+    sort($set);
+
+    expect($set)->toBe(
+        $read,
+        "IconColumnComponent\IconComponent's slots and the `.sy-ta-icon > .sy-icon.sy-color` rule "
+        . 'disagree on which `--sy-` variables carry the resolved shades.',
+    );
 })->with('adversarial palettes');
 
 /**
@@ -297,4 +369,38 @@ it('leaves the icon shades short of the non-text ratio in exactly the light-mode
         'uncoloured item icon light',
         'gray badge icon light',
     ]);
+});
+
+/**
+ * The class-and-slot cases above pass for any shade under the right key, so none of them says
+ * *which* ratio picked it — swap `Color::WCAG_AA_NON_TEXT` for the `slot()` default and every one
+ * stays green while each icon darkens by a step or two, silently trading the reading Filament
+ * chose for a stricter one. Both halves of the contract are pinned here against the shipped
+ * palettes: each resolved shade clears the 3.0:1 a non-text element owes its surface, and at
+ * least one lands *under* 4.5:1, which is only reachable when the looser ratio is the one asked
+ * for. The surfaces are the pair the table chrome paints — `bg-white dark:bg-gray-900` on
+ * `.sy-ta-ctn` — the same two the policy resolves against.
+ */
+it('resolves the icon column shades at the non-text ratio rather than the text one', function (): void {
+    $colors = new ColorManager(new ContainerBuilder());
+    $gray = ColorManager::DEFAULT_COLORS['gray'];
+    $policy = new IconColumnIconComponent($colors);
+
+    $ratios = [];
+
+    foreach (ColorManager::DEFAULT_COLORS as $name => $palette) {
+        $map = $policy->getColorMap($palette);
+
+        $ratios["{$name} light"] = Color::calculateContrastRatio('oklch(1 0 0)', $palette[$map['text']]);
+        $ratios["{$name} dark"] = Color::calculateContrastRatio($gray[900], $palette[$map['dark:text']]);
+    }
+
+    $short = array_keys(array_filter($ratios, fn (float $ratio): bool => $ratio < Color::WCAG_AA_NON_TEXT));
+    $underTextRatio = array_filter($ratios, fn (float $ratio): bool => $ratio < Color::WCAG_AA_TEXT);
+
+    expect($short)->toBe([], 'The icon column resolves a shade that misses the 3.0:1 a non-text element owes its surface.')
+        ->and($underTextRatio)->not->toBeEmpty(
+            'Every icon column shade clears 4.5:1, which is what resolving at the *text* ratio '
+            . 'would produce — the policy is no longer asking for Color::WCAG_AA_NON_TEXT.',
+        );
 });

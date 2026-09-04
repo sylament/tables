@@ -1,0 +1,17 @@
+.sy-ta {
+    & .sy-ta-text-summary,
+    & .sy-ta-range-summary,
+    & .sy-ta-values-summary {
+        @apply grid gap-y-1 px-3 py-4 text-sm text-gray-500 dark:text-gray-400;
+    }
+
+    & .sy-ta-text-summary > .sy-ta-text-summary-label,
+    & .sy-ta-range-summary > .sy-ta-range-summary-label,
+    & .sy-ta-values-summary > .sy-ta-values-summary-label {
+        @apply font-medium text-gray-950 dark:text-white;
+    }
+
+    & .sy-ta-values-summary > ul.sy-bulleted {
+        @apply list-inside list-disc;
+    }
+}

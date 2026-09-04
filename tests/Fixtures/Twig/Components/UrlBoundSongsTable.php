@@ -9,7 +9,7 @@ use Symfony\UX\LiveComponent\Attribute\AsLiveComponent;
 use Symfony\UX\LiveComponent\Metadata\UrlMapping;
 
 /**
- * The page-shaped host: it binds all four state props to the query string under
+ * The page-shaped host: it binds all five state props to the query string under
  * Filament's own names and persists sort, search and filters in the session —
  * the opt-in a routed panel page makes.
  */
@@ -27,7 +27,7 @@ final class UrlBoundSongsTable extends BrowsingStateTable
     protected function getTableUrlMapping(string $prop): ?UrlMapping
     {
         return match ($prop) {
-            'page', 'sort', 'search', 'filters' => new UrlMapping(as: $prop),
+            'page', 'sort', 'search', 'filters', 'grouping' => new UrlMapping(as: $prop),
             default => null,
         };
     }

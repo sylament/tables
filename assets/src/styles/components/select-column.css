@@ -1,0 +1,7 @@
+.sy-ta-select {
+    @apply w-full min-w-48;
+
+    &:not(.sy-inline) {
+        @apply px-3 py-4;
+    }
+}

@@ -414,9 +414,10 @@ class ImageColumn extends Column
     /**
      * The cell's images, one entry per state value, sliced to the limit: each value resolved to
      * a URL (a non-string or unresolvable value falls back to the default image), paired with
-     * its alt text. A blank state renders the default image alone when one is set.
+     * its alt text and the raw value the per-item tooltip and link closures are handed. A blank
+     * state renders the default image alone when one is set.
      *
-     * @return list<array{url: ?string, alt: ?string}>
+     * @return list<array{url: ?string, alt: ?string, state: mixed}>
      */
     public function getStateItems(): array
     {
@@ -435,6 +436,7 @@ class ImageColumn extends Column
                     ? ($this->getImageUrl($value) ?? $defaultImageUrl)
                     : $defaultImageUrl,
                 'alt' => $this->getAlt($value),
+                'state' => $value,
             ],
             $values,
         );

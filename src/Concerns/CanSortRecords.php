@@ -127,6 +127,13 @@ trait CanSortRecords
     {
         $table = $this->getTable();
 
+        // Under `groupsOnly()` the group's own order is the only one there is:
+        // no record row renders, so no user sort, default sort or tiebreaker
+        // means anything — and this wins over reordering, as Filament has it.
+        if ($table->isGroupsOnly()) {
+            return $query;
+        }
+
         // A drag orders the rows itself, so the reorder column replaces every
         // ordering the table would otherwise apply — the user's sort, the
         // default sort and the identifier tiebreaker alike.

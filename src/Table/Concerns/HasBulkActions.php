@@ -22,6 +22,8 @@ trait HasBulkActions
 
     protected bool|Closure $canTrackDeselectedRecords = true;
 
+    protected bool|Closure $selectsGroupsOnly = false;
+
     /**
      * @deprecated Use toolbarActions() instead.
      *
@@ -91,6 +93,24 @@ trait HasBulkActions
     public function selectsCurrentPageOnly(): bool
     {
         return (bool) $this->evaluate($this->selectsCurrentPageOnly) || !$this->hasQuery();
+    }
+
+    /**
+     * Removes every affordance that selects a whole page — the header checkbox
+     * and the banner's select-all-across-pages link — leaving the group and
+     * record checkboxes as the only ways to select. Selection itself, the
+     * checkbox column and its header cell are untouched.
+     */
+    public function selectGroupsOnly(bool|Closure $condition = true): static
+    {
+        $this->selectsGroupsOnly = $condition;
+
+        return $this;
+    }
+
+    public function selectsGroupsOnly(): bool
+    {
+        return (bool) $this->evaluate($this->selectsGroupsOnly);
     }
 
     public function selectable(bool|Closure|null $condition = true): static

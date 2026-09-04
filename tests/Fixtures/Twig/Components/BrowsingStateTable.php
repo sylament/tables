@@ -21,10 +21,11 @@ use Symfony\UX\LiveComponent\DefaultActionTrait;
 
 /**
  * The table the query-string and session tests browse: sortable, searchable,
- * paginated two-to-a-page, and filtered by a select whose default is a real
- * value — so a seeded filter has a default to beat — beside a ternary, whose
- * `'true'` / `'false'` query-string values only become booleans if the seeded
- * bag is normalized.
+ * paginated two-to-a-page, groupable by two of its columns — so a seeded
+ * grouping has something real to name and something real to be refused against
+ * — and filtered by a select whose default is a real value, so a seeded filter
+ * has a default to beat, beside a ternary, whose `'true'` / `'false'`
+ * query-string values only become booleans if the seeded bag is normalized.
  *
  * Concrete subclasses decide whether any of it reaches the URL.
  */
@@ -60,6 +61,7 @@ abstract class BrowsingStateTable implements InteractsWithActions, InteractsWith
                 TernaryFilter::make('featured')
                     ->attribute('isFeatured'),
             ])
+            ->groups(['plays', 'artist.name'])
             ->searchable()
             ->paginated([2, 5])
             ->defaultPaginationPageOption(2);

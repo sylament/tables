@@ -116,8 +116,15 @@ it('yields null when a to-many path collects nothing', function (): void {
     expect(Column::make('genres.name')->record(songWithGenres())->getState())->toBeNull();
 });
 
+/*
+ * The record read keeps a blank to-one leaf where Filament's relationship arm drops it;
+ * `getState()`'s blank-to-default arm then collapses the pair anyway, so the divergence is
+ * visible only one level down. Asserting both is what keeps it that way.
+ */
 it('reads a to-one chain unchanged, blank leaf included', function (): void {
-    expect(Column::make('artist.name')->record(new Song('Airbag', 'OK Computer', new Artist('')))->getState())->toBe('')
+    expect(Column::make('artist.name')->record(new Song('Airbag', 'OK Computer', new Artist('')))->getStateFromRecord())->toBe('')
+        ->and(Column::make('artist.name')->record(new Song('Airbag', 'OK Computer', new Artist('')))->getState())->toBeNull()
+        ->and(Column::make('artist.name')->record(new Song('Airbag', 'OK Computer', new Artist('')))->default('—')->getState())->toBe('—')
         ->and(Column::make('artist.name')->record(new Song('Airbag', 'OK Computer'))->getState())->toBeNull();
 });
 
@@ -293,4 +300,94 @@ it('scopes searchability with the isGlobal and isIndividual flags', function ():
     expect($individual->isSearchable())->toBeTrue()
         ->and($individual->isGloballySearchable())->toBeFalse()
         ->and($individual->isIndividuallySearchable())->toBeTrue();
+});
+
+it('defers term splitting to the table until the column decides for itself', function (): void {
+    expect(TextColumn::make('title')->shouldSplitIndividualSearchTerms())->toBeNull()
+        ->and(TextColumn::make('title')->splitIndividualSearchTerms()->shouldSplitIndividualSearchTerms())->toBeTrue()
+        ->and(TextColumn::make('title')->splitIndividualSearchTerms(false)->shouldSplitIndividualSearchTerms())->toBeFalse()
+        ->and(TextColumn::make('title')->splitIndividualSearchTerms(fn (): bool => false)->shouldSplitIndividualSearchTerms())->toBeFalse();
+});
+
+it('refuses an unmounted column by name rather than raising an uninitialised property error', function (): void {
+    expect(fn (): Table => Column::make('title')->getTable())
+        ->toThrow(LogicException::class, 'The column [title] is not mounted to a table.');
+});
+
+it('kebab-cases each dotted segment of the name for the cell and header classes', function (): void {
+    expect(Column::make('title')->getCellClassName())->toBe('sy-ta-cell-title')
+        ->and(Column::make('releasedAt')->getCellClassName())->toBe('sy-ta-cell-released-at')
+        ->and(Column::make('author.fullName')->getCellClassName())->toBe('sy-ta-cell-author.full-name')
+        ->and(Column::make('authorFullName')->getCellClassName())->toBe('sy-ta-cell-author-full-name')
+        ->and(Column::make('releasedAt')->getHeaderCellClassName())->toBe('sy-ta-header-cell-released-at');
+});
+
+it('hands a closure the row loop it was given', function (): void {
+    $column = Column::make('title')->rowLoop(['index0' => 1, 'index' => 2, 'length' => 3, 'first' => false, 'last' => false, 'revindex0' => 1]);
+
+    expect($column->extraCellAttributes(fn (?stdClass $rowLoop): array => [
+        'data-iteration' => $rowLoop?->iteration,
+        'data-index' => $rowLoop?->index,
+        'data-remaining' => $rowLoop?->remaining,
+        'data-count' => $rowLoop?->count,
+    ])->getExtraCellAttributes())->toBe([
+        'data-iteration' => 2,
+        'data-index' => 1,
+        'data-remaining' => 1,
+        'data-count' => 3,
+    ]);
+});
+
+it('falls back to the default state when the read is blank', function (): void {
+    expect(Column::make('note')->record(['note' => null])->default('—')->getState())->toBe('—')
+        ->and(Column::make('note')->record(['note' => ''])->default('—')->getState())->toBe('—')
+        ->and(Column::make('note')->record(['note' => []])->default('—')->getState())->toBe('—')
+        ->and(Column::make('note')->record(['note' => 'kept'])->default('—')->getState())->toBe('kept');
+});
+
+it('keeps a falsy but filled state rather than defaulting it', function (): void {
+    expect(Column::make('plays')->record(['plays' => 0])->default(99)->getState())->toBe(0)
+        ->and(Column::make('flag')->record(['flag' => false])->default(true)->getState())->toBeFalse();
+});
+
+it('evaluates a default-state closure', function (): void {
+    expect(Column::make('note')->record(['note' => null])->default(fn (): string => 'computed')->getState())->toBe('computed')
+        ->and(Column::make('note')->record(['note' => null])->getDefaultState())->toBeNull();
+});
+
+it('caches the defaulted state per record key', function (): void {
+    $calls = 0;
+    $column = Column::make('note')->record(['note' => null])->recordKey('1')->default(function () use (&$calls): string {
+        $calls++;
+
+        return 'computed';
+    });
+
+    expect($column->getState())->toBe('computed')
+        ->and($column->getState())->toBe('computed')
+        ->and($calls)->toBe(1);
+});
+
+it('splits a string state on the separator', function (): void {
+    expect(Column::make('tags')->record(['tags' => 'symfony,forms'])->separator()->getState())->toBe(['symfony', 'forms'])
+        ->and(Column::make('tags')->record(['tags' => 'symfony|forms'])->separator('|')->getState())->toBe(['symfony', 'forms'])
+        ->and(Column::make('tags')->record(['tags' => 'symfony,forms'])->getState())->toBe('symfony,forms');
+});
+
+it('collapses a single blank part to an empty list, which the default then fills', function (): void {
+    expect(Column::make('tags')->record(['tags' => ''])->separator()->getState())->toBeNull()
+        ->and(Column::make('tags')->record(['tags' => '   '])->separator()->getState())->toBeNull()
+        ->and(Column::make('tags')->record(['tags' => ''])->separator()->default(['none'])->getState())->toBe(['none']);
+});
+
+it('leaves a non-string state untouched by the separator', function (): void {
+    expect(Column::make('tags')->record(['tags' => ['symfony', 'forms']])->separator()->getState())->toBe(['symfony', 'forms'])
+        ->and(Column::make('plays')->record(['plays' => 12])->separator()->getState())->toBe(12);
+});
+
+it('evaluates a separator closure and skips splitting for a falsy one', function (): void {
+    expect(Column::make('tags')->record(['tags' => 'a;b'])->separator(fn (): string => ';')->getState())->toBe(['a', 'b'])
+        ->and(Column::make('tags')->record(['tags' => 'a,b'])->separator(null)->getState())->toBe('a,b')
+        ->and(Column::make('tags')->record(['tags' => 'a,b'])->separator('')->getState())->toBe('a,b')
+        ->and(Column::make('tags')->separator('|')->getSeparator())->toBe('|');
 });

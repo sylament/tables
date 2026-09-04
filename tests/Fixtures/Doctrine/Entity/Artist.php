@@ -65,6 +65,13 @@ class Artist
         return $this->name;
     }
 
+    public function setName(string $name): static
+    {
+        $this->name = $name;
+
+        return $this;
+    }
+
     public function getLabel(): ?Label
     {
         return $this->label;

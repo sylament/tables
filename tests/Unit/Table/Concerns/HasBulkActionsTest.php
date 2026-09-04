@@ -137,6 +137,19 @@ it('wraps grouped bulk actions in a BulkActionGroup', function (): void {
         ->and($table->isSelectionEnabled())->toBeTrue();
 });
 
+it('selects groups only when told to, closure included', function (): void {
+    $default = new TableHost()->getTable();
+    $groupsOnly = new TableHost(fn (Table $table): Table => $table->selectGroupsOnly())->getTable();
+    $closured = new TableHost(fn (Table $table): Table => $table->selectGroupsOnly(fn (): bool => false))->getTable();
+
+    expect($default->selectsGroupsOnly())->toBeFalse()
+        ->and($groupsOnly->selectsGroupsOnly())->toBeTrue()
+        ->and($closured->selectsGroupsOnly())->toBeFalse()
+        // It removes the page-wide affordances and nothing else, so selection
+        // itself and the checkbox column stay exactly as they were.
+        ->and($groupsOnly->isSelectionEnabled())->toBe($default->isSelectionEnabled());
+});
+
 it('takes the checkbox position from the setter, closure included', function (): void {
     expect(Table::make(new TableHost())->recordCheckboxPosition(RecordCheckboxPosition::AfterCells)->getRecordCheckboxPosition())
         ->toBe(RecordCheckboxPosition::AfterCells)

@@ -355,6 +355,7 @@ trait HasFilters
         }
 
         $this->resetTableSearch();
+        $this->resetTableColumnSearches();
 
         if ($this->getTable()->hasDeferredFilters()) {
             $this->applyTableFilters();

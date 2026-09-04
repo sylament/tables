@@ -771,8 +771,8 @@ it('injects the table state into the records closure lazily', function (): void 
     $host = new TableHost(function (Table $t) use (&$seen): Table {
         return $t
             ->columns([TextColumn::make('title')->sortable()])
-            ->records(function (int $page, int|string|null $recordsPerPage, ?string $search, array $sort, ?string $sortColumn, ?string $sortDirection, array $filters) use (&$seen): array {
-                $seen = ['page' => $page, 'recordsPerPage' => $recordsPerPage, 'search' => $search, 'sort' => $sort, 'sortColumn' => $sortColumn, 'sortDirection' => $sortDirection, 'filters' => $filters];
+            ->records(function (int $page, int|string|null $recordsPerPage, ?string $search, array $columnSearches, array $sort, ?string $sortColumn, ?string $sortDirection, array $filters) use (&$seen): array {
+                $seen = ['page' => $page, 'recordsPerPage' => $recordsPerPage, 'search' => $search, 'columnSearches' => $columnSearches, 'sort' => $sort, 'sortColumn' => $sortColumn, 'sortDirection' => $sortDirection, 'filters' => $filters];
 
                 return [];
             });
@@ -781,6 +781,7 @@ it('injects the table state into the records closure lazily', function (): void 
     $host->sortTable('title', 'desc');
     $host->gotoTablePage(3);
     $host->tableSearch = 'radiohead';
+    $host->tableColumnSearches = ['title' => ' bends '];
     $host->tableFilters = ['status' => ['value' => 'published']];
     $host->getTableRecords();
 
@@ -788,6 +789,7 @@ it('injects the table state into the records closure lazily', function (): void 
         'page' => 3,
         'recordsPerPage' => 10,
         'search' => 'radiohead',
+        'columnSearches' => ['title' => 'bends'],
         'sort' => ['title', 'desc'],
         'sortColumn' => 'title',
         'sortDirection' => 'desc',
@@ -1030,6 +1032,29 @@ it('adds no eager join to the standalone count or to record resolution', functio
         ->and($countStatements)->toHaveCount(1)
         ->and($countStatements[0])->not->toContain('LEFT JOIN')
         ->and($record)->toBeInstanceOf(DoctrineSong::class)
+        ->and($recorder->statements())->toHaveCount(1)
+        ->and($recorder->statements()[0])->not->toContain('LEFT JOIN');
+});
+
+it('fetch-joins nothing for a hidden or a toggled-hidden to-one column', function (): void {
+    $recorder = new RecordingMiddleware();
+    $entityManager = songsWithRelations($recorder);
+    $configure = fn (Table $table): Table => $table
+        ->query($entityManager->createQueryBuilder()->select('song')->from(DoctrineSong::class, 'song'))
+        ->paginated(false);
+    $hidden = new TableHost(fn (Table $table): Table => $configure($table)->columns([TextColumn::make('artist.label.name')->hidden()]));
+    $toggled = new TableHost(fn (Table $table): Table => $configure($table)->columns([TextColumn::make('artist.label.name')->toggleable()]));
+    $toggled->tableColumns = [['type' => 'column', 'name' => 'artist.label.name', 'isToggled' => false, 'isToggledHiddenByDefault' => false]];
+
+    $recorder->reset();
+    $hidden->getTableRecords();
+    $hiddenStatements = $recorder->statements();
+
+    $recorder->reset();
+    $toggled->getTableRecords();
+
+    expect($hiddenStatements)->toHaveCount(1)
+        ->and($hiddenStatements[0])->not->toContain('LEFT JOIN')
         ->and($recorder->statements())->toHaveCount(1)
         ->and($recorder->statements()[0])->not->toContain('LEFT JOIN');
 });

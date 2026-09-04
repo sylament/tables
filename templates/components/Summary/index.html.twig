@@ -1,0 +1,108 @@
+{% props
+    id = null,
+
+    columns = [],
+    pluralRecordLabel = 'records',
+
+    pageQuery = null,
+    allQuery = null,
+    pageSelectedState = {},
+    allSelectedState = {},
+
+    hasPageSummary = false,
+    hasAllSummary = true,
+
+    extraHeadingColumn = false,
+    placeholderColumns = true,
+    groupsOnly = false,
+
+    actionsBeforeCells = false,
+    actionsBeforeColumns = false,
+    actionsAfterColumns = false,
+    actionsAfterCells = false,
+    checkboxLeading = false,
+    checkboxTrailing = false
+%}
+
+{% set placeholderCells = {
+    actionsBeforeCells: actionsBeforeCells,
+    actionsBeforeColumns: actionsBeforeColumns,
+    actionsAfterColumns: actionsAfterColumns,
+    actionsAfterCells: actionsAfterCells,
+    checkboxLeading: checkboxLeading,
+    checkboxTrailing: checkboxTrailing,
+} %}
+
+{% if hasPageSummary %}
+    <tr {{ attrs({
+        class: 'sy-ta-row sy-ta-summary-header-row sy-striped',
+        id: id ? id ~ '.header' : null,
+    }) }}>
+        {% if placeholderColumns and actionsBeforeCells %}<td class="sy-ta-cell"></td>{% endif %}
+        {% if placeholderColumns and checkboxLeading %}<td class="sy-ta-cell"></td>{% endif %}
+        {% if placeholderColumns and actionsBeforeColumns %}<td class="sy-ta-cell"></td>{% endif %}
+
+        {% if extraHeadingColumn %}
+            <th scope="col" class="sy-ta-cell sy-ta-summary-header-cell sy-align-start">Summary</th>
+        {% endif %}
+
+        {% for column in columns %}
+            {% set columnHasSummary = (pageQuery is not null and column.hasSummary(pageQuery)) or column.hasSummary(allQuery) %}
+            {% set isFirstHeadingCell = loop.first and not extraHeadingColumn %}
+            {% set hasColumnLabel = not placeholderColumns or columnHasSummary %}
+            {% set isLabelledCell = isFirstHeadingCell or hasColumnLabel %}
+            {% set columnHiddenFrom = column.getHiddenFrom %}
+            {% set columnVisibleFrom = column.getVisibleFrom %}
+
+            {% if placeholderColumns or columnHasSummary %}
+                {# Only a labelled cell becomes a column header; an empty placeholder stays
+                   a `<td>`, so a screen reader announces no blank column header. #}
+                <{{ isLabelledCell ? 'th' : 'td' }} {{ attrs({
+                    scope: isLabelledCell ? 'col' : null,
+                    class: classes('sy-ta-cell sy-ta-summary-header-cell', isFirstHeadingCell
+                        ? 'sy-align-start'
+                        : (hasColumnLabel ? (column.getAlignmentClass ?? 'sy-align-start') : null), [
+                        columnHiddenFrom ? columnHiddenFrom ~ ':sy-ta-hidden' : null,
+                        columnVisibleFrom ? columnVisibleFrom ~ ':sy-ta-visible' : null,
+                    ]),
+                }) }}>
+                    {%- if isFirstHeadingCell -%}
+                        Summary
+                    {%- elseif hasColumnLabel -%}
+                        {{ column.getLabel }}
+                    {%- endif -%}
+                </{{ isLabelledCell ? 'th' : 'td' }}>
+            {% endif %}
+        {% endfor %}
+
+        {% if placeholderColumns and actionsAfterColumns %}<td class="sy-ta-cell"></td>{% endif %}
+        {% if placeholderColumns and checkboxTrailing %}<td class="sy-ta-cell"></td>{% endif %}
+        {% if placeholderColumns and actionsAfterCells %}<td class="sy-ta-cell"></td>{% endif %}
+    </tr>
+
+    <twig:SylamentTables:SummaryRow
+        :id="id ? id ~ '.page' : null"
+        :columns="columns"
+        heading="This page"
+        :query="pageQuery"
+        :selectedState="pageSelectedState"
+        :extraHeadingColumn="extraHeadingColumn"
+        :placeholderColumns="placeholderColumns"
+        {{ ...placeholderCells }}
+    />
+{% endif %}
+
+{% if hasAllSummary %}
+    <twig:SylamentTables:SummaryRow
+        :id="id ? id ~ '.all' : null"
+        :columns="columns"
+        :heading="hasPageSummary ? 'All ' ~ pluralRecordLabel : 'Summary'"
+        :query="allQuery"
+        :selectedState="allSelectedState"
+        :extraHeadingColumn="extraHeadingColumn"
+        :placeholderColumns="placeholderColumns"
+        :groupsOnly="groupsOnly"
+        :striped="not hasPageSummary"
+        {{ ...placeholderCells }}
+    />
+{% endif %}

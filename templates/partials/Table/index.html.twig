@@ -1,7 +1,7 @@
 {# Null until the deferred window closes, so every records-touching read below
    stays gated on it — an ungated one queries a table that renders no rows. #}
 {% set records = component.isLoaded ? component.getRecords : null %}
-{% set columns = component.getColumns %}
+{% set columns = component.getVisibleColumns %}
 {% set hostId = component.getLiveComponent.getTableHostId %}
 {% set isReorderable = component.isReorderable %}
 {% set isReordering = component.isReordering %}
@@ -15,6 +15,9 @@
 {% set sortColumn = component.getSortColumn %}
 {% set sortDirection = component.getSortDirection %}
 {% set isSearchable = component.isSearchable %}
+{% set searchOnBlur = component.isSearchOnBlur %}
+{% set searchDebounceMs = component.getSearchDebounceMilliseconds %}
+{% set isSearchableByColumn = component.isSearchableByColumn %}
 {% set isFilterable = component.isFilterable %}
 {% set filtersTriggerVisible = isFilterable and component.hasFiltersTrigger %}
 {% set filtersDropdownVisible = isFilterable and component.hasFiltersDropdown %}
@@ -30,6 +33,30 @@
 {% set filtersResetActionPosition = isFilterable ? component.getFiltersResetActionPosition : null %}
 {% set filtersForm = filtersChromeVisible ? renderComponent(component.getLiveComponent.getTableFiltersForm) : null %}
 
+{% set hasColumnManager = component.hasColumnManager %}
+{% set columnManagerDropdownVisible = hasColumnManager and component.hasColumnManagerDropdown %}
+{% set columnManagerModalVisible = hasColumnManager and component.hasColumnManagerModal %}
+{% set columnManagerApplyAction = hasColumnManager ? component.getColumnManagerApplyAction : null %}
+{% set columnManagerApplyVisible = columnManagerApplyAction is not null and columnManagerApplyAction.isVisible %}
+{% set columnManagerResetActionPosition = hasColumnManager ? component.getColumnManagerResetActionPosition : null %}
+{% set columnManagerToggleable = hasColumnManager and component.hasToggleableColumns %}
+{% set columnManagerItems = hasColumnManager ? component.getLiveComponent.getTableColumnManagerItems : [] %}
+
+{# The grouping in force and the settings that describe it — every read here is
+   preamble-safe, since none of them touches a record. The per-row boundaries are
+   read beside the loop instead, inside the loaded branch. #}
+{% set group = component.getGrouping %}
+{% set groups = component.getGroups %}
+{% set isGroupsOnly = component.isGroupsOnly and group is not null %}
+{% set groupingVisible = not isReordering and groups is not empty and not component.areGroupingSettingsHidden %}
+{% set groupingDirectionHidden = component.isGroupingDirectionSettingHidden %}
+{% set groupingInDropdownOnDesktop = component.areGroupingSettingsInDropdownOnDesktop %}
+{% set groupColumn = component.getLiveComponent.getTableGroupingColumn %}
+{% set groupDirection = component.getLiveComponent.getTableGroupingDirection ?? 'asc' %}
+{% set groupCollapsible = group is not null and group.isCollapsible %}
+{% set groupsCollapsed = groupCollapsible and component.areGroupsCollapsedByDefault %}
+{% set groupLabelPrefix = group is not null and group.isTitlePrefixedWithLabel ? group.getLabel : null %}
+
 {% set filterIndicators = component.getFilterIndicators %}
 {% set removableIndicatorCount = filterIndicators|filter(carrier => carrier.indicator.isRemovable)|length %}
 
@@ -40,7 +67,7 @@
 {% set headingTag = component.getHeadingTag %}
 {% set headerVisible = heading or description or headerActions is not empty %}
 {% set headerActionsAdaptive = component.getHeaderActionsPosition is same as(constant('Sylament\\Tables\\Enums\\HeaderActionsPosition::Adaptive')) %}
-{% set toolbarVisible = isSearchable or filtersTriggerVisible or toolbarActions is not empty or isReorderable %}
+{% set toolbarVisible = isSearchable or filtersTriggerVisible or toolbarActions is not empty or isReorderable or hasColumnManager or groupingVisible %}
 
 {% set recordActionsByKey = isReordering or records is null ? {} : component.getVisibleRecordActionsByRecordKey %}
 {% set hasRecordActions = recordActionsByKey|filter(actions => actions is not empty)|length > 0 %}
@@ -50,10 +77,10 @@
 {% set actionsAfterColumns = hasRecordActions and recordActionsPosition == 'AfterColumns' %}
 {% set actionsAfterCells = hasRecordActions and recordActionsPosition == 'AfterCells' %}
 
-{% set isSelectionEnabled = component.isSelectionEnabled %}
+{% set isSelectionEnabled = component.isSelectionEnabled and not isGroupsOnly %}
 {% set hasSelection = isSelectionEnabled and component.getLiveComponent.hasSelectedTableRecords %}
-{% set checkboxLeading = isSelectionEnabled and not isReordering and component.getRecordCheckboxPosition.name == 'BeforeCells' %}
-{% set checkboxTrailing = isSelectionEnabled and not isReordering and component.getRecordCheckboxPosition.name == 'AfterCells' %}
+{% set checkboxLeading = isSelectionEnabled and not isReordering and records is not empty and component.getRecordCheckboxPosition.name == 'BeforeCells' %}
+{% set checkboxTrailing = isSelectionEnabled and not isReordering and records is not empty and component.getRecordCheckboxPosition.name == 'AfterCells' %}
 {% set allSelectableCount = isSelectionEnabled and not isReordering and records is not null ? component.getLiveComponent.getAllSelectableTableRecordsCount : null %}
 
 {% set isStriped = component.isStriped %}
@@ -92,14 +119,109 @@
     {% endset %}
 {% endif %}
 
+{% set columnManagerTriggerControl = null %}
+{% if hasColumnManager %}
+    {% set columnManagerTriggerControl %}{{ renderComponent(component.getColumnManagerTriggerAction) }}{% endset %}
+{% endif %}
+
+{% set columnManagerPanel = null %}
+{% if columnManagerDropdownVisible %}
+    {% set columnManagerPanel %}
+        <twig:SylamentTables:ColumnManager
+            :hostId="hostId"
+            :headingLevel="3"
+            :resetActionPosition="columnManagerResetActionPosition"
+            :items="columnManagerItems"
+            :gridColumns="component.getColumnManagerColumns"
+            :toggleable="columnManagerToggleable"
+            :reorderable="component.hasReorderableColumns"
+            :reorderAnimationDuration="component.getReorderAnimationDuration"
+            :live="not columnManagerApplyVisible"
+            :applyVisible="columnManagerApplyVisible"
+            :applyAction="columnManagerApplyAction"
+        />
+    {% endset %}
+{% endif %}
+
+{# Two selects captured once, composed into two copies: a dropdown one for the
+   narrow viewport and an inline one for the wide. The changed select is the
+   controller's authority, so the two copies never disagree for longer than one
+   tick. #}
+{% set groupingFieldsDropdown = null %}
+{% set groupingFieldsInline = null %}
+{% if groupingVisible %}
+    {% set groupSelect %}
+        <select {{ attrs({
+            class: 'sy-fo-select',
+            'aria-label': 'Group by',
+        }, stimulus_target('sylament--tables--table', 'groupColumn'), stimulus_action('sylament--tables--table', 'group', 'change')) }}>
+            <option {{ attrs({value: '', selected: groupColumn is null}) }}>-</option>
+
+            {% for groupOption in groups %}
+                <option {{ attrs({
+                    value: groupOption.getId,
+                    selected: groupColumn == groupOption.getId,
+                }) }}>{{ groupOption.getLabel }}</option>
+            {% endfor %}
+        </select>
+    {% endset %}
+
+    {% set directionSelect %}
+        <select {{ attrs({
+            class: 'sy-fo-select',
+            'aria-label': 'Group direction',
+        }, stimulus_target('sylament--tables--table', 'groupDirection'), stimulus_action('sylament--tables--table', 'group', 'change')) }}>
+            <option {{ attrs({value: 'asc', selected: groupDirection != 'desc'}) }}>Ascending</option>
+            <option {{ attrs({value: 'desc', selected: groupDirection == 'desc'}) }}>Descending</option>
+        </select>
+    {% endset %}
+
+    {% set groupingFieldsDropdown %}
+        <label class="sy-ta-grouping-settings-field">
+            <span class="sy-ta-grouping-settings-field-label">Group by</span>
+
+            <twig:SylamentSupport:InputWrapper>{{ groupSelect }}</twig:SylamentSupport:InputWrapper>
+        </label>
+
+        {% if not groupingDirectionHidden %}
+            <label {{ attrs({
+                class: 'sy-ta-grouping-settings-field',
+                hidden: groupColumn is null,
+            }, stimulus_target('sylament--tables--table', 'groupDirectionField')) }}>
+                <span class="sy-ta-grouping-settings-field-label">Group direction</span>
+
+                <twig:SylamentSupport:InputWrapper>{{ directionSelect }}</twig:SylamentSupport:InputWrapper>
+            </label>
+        {% endif %}
+    {% endset %}
+
+    {% set groupingFieldsInline %}
+        <label class="sy-ta-grouping-settings-field">
+            <twig:SylamentSupport:InputWrapper prefix="Group by">{{ groupSelect }}</twig:SylamentSupport:InputWrapper>
+        </label>
+
+        {% if not groupingDirectionHidden %}
+            <label {{ attrs({
+                class: 'sy-ta-grouping-settings-field',
+                hidden: groupColumn is null,
+            }, stimulus_target('sylament--tables--table', 'groupDirectionField')) }}>
+                <span class="sy-sr-only">Group direction</span>
+
+                <twig:SylamentSupport:InputWrapper>{{ directionSelect }}</twig:SylamentSupport:InputWrapper>
+            </label>
+        {% endif %}
+    {% endset %}
+{% endif %}
+
 <div {{ attrs({
     class: 'sy sy-ta',
-}, isSelectionEnabled or isReorderable or isDeferred or pollIntervalMilliseconds is not null ? stimulus_controller('sylament--tables--table', {
+}, isSelectionEnabled or isReorderable or isDeferred or pollIntervalMilliseconds is not null or groupingVisible or group is not null ? stimulus_controller('sylament--tables--table', {
     canTrack: component.canTrackDeselectedRecords,
     pageOnly: component.selectsCurrentPageOnly,
     allSelectableCount: allSelectableCount,
     deferred: isDeferred,
     pollInterval: pollIntervalMilliseconds,
+    groupsCollapsedByDefault: component.areGroupsCollapsedByDefault,
     countOne: '1 record selected',
     countMany: ':count records selected',
 }) : null) }}>
@@ -141,7 +263,7 @@
 
         {% if toolbarVisible %}
             <div class="sy-ta-header-toolbar">
-                {% if isReorderable or toolbarActions is not empty %}
+                {% if isReorderable or toolbarActions is not empty or groupingVisible %}
                     <div class="sy-ta-header-toolbar-actions">
                         {% if isReorderable %}
                             {{ renderComponent(component.getReorderRecordsTriggerAction(isReordering)) }}
@@ -162,27 +284,35 @@
                             {% endif %}
                         {% endfor %}
 
-                        {# grouping selector slot — M4 · 6 #}
+                        {% if groupingVisible %}
+                            <div {{ attrs({
+                                class: classes('sy-ta-grouping-settings', {
+                                    'sy-ta-grouping-settings-dropdown-on-desktop': groupingInDropdownOnDesktop,
+                                }),
+                            }) }}>
+                                <twig:SylamentSupport:Dropdown placement="bottom-start" :teleport="true" width="20rem">
+                                    <twig:block name="trigger">{{ renderComponent(component.getGroupRecordsTriggerAction) }}</twig:block>
+
+                                    <twig:block name="content">
+                                        <div class="sy-ta-grouping-settings-fields">{{ groupingFieldsDropdown }}</div>
+                                    </twig:block>
+                                </twig:SylamentSupport:Dropdown>
+
+                                {% if not groupingInDropdownOnDesktop %}
+                                    <div class="sy-ta-grouping-settings-fields">{{ groupingFieldsInline }}</div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
                     </div>
                 {% endif %}
 
                 <div class="sy-ta-header-toolbar-end">
                     {% if isSearchable %}
-                        <label class="sy-ta-search-field">
-                            <twig:SylamentSupport:Icon
-                                icon="heroicons:magnifying-glass-20-solid"
-                                :alias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::SEARCH_FIELD')"
-                            />
-                            <input
-                                type="search"
-                                class="sy-ta-search-input"
-                                autocomplete="off"
-                                maxlength="1000"
-                                placeholder="{{ component.getSearchPlaceholder ?? 'Search' }}"
-                                aria-label="Search"
-                                data-model="{{ component.isSearchOnBlur ? 'on(change)|tableSearch' : 'debounce(' ~ component.getSearchDebounceMilliseconds ~ ')|tableSearch' }}"
-                            >
-                        </label>
+                        <twig:SylamentTables:SearchField
+                            :placeholder="component.getSearchPlaceholder ?? 'Search'"
+                            :onBlur="searchOnBlur"
+                            :debounceMs="searchDebounceMs"
+                        />
                     {% endif %}
 
                     {% if filtersDropdownVisible %}
@@ -202,7 +332,22 @@
                         {{ filtersTriggerControl }}
                     {% endif %}
 
-                    {# column manager slot — M4 · 5 #}
+                    {% if columnManagerDropdownVisible %}
+                        <twig:SylamentSupport:Dropdown
+                            class="sy-ta-col-manager-dropdown"
+                            placement="bottom-end"
+                            :flip="false"
+                            :teleport="true"
+                            :width="component.getColumnManagerWidth"
+                            :maxHeight="component.getColumnManagerMaxHeight"
+                        >
+                            <twig:block name="trigger">{{ columnManagerTriggerControl }}</twig:block>
+
+                            <twig:block name="content">{{ columnManagerPanel }}</twig:block>
+                        </twig:SylamentSupport:Dropdown>
+                    {% elseif columnManagerModalVisible %}
+                        {{ columnManagerTriggerControl }}
+                    {% endif %}
                 </div>
             </div>
         {% endif %}
@@ -224,6 +369,38 @@
                         {% endif %}
 
                         <twig:SylamentSupport:Button color="danger" size="sm" {{ ...filtersResetAttributes }}>Reset</twig:SylamentSupport:Button>
+                    </div>
+                </twig:block>
+            </twig:SylamentSupport:Modal>
+        {% endif %}
+
+        {% if columnManagerModalVisible %}
+            {% set columnManagerResetAttributes = stimulus_action('live', 'action', parameters: {action: 'resetTableColumnManager'}) %}
+
+            <twig:SylamentSupport:Modal
+                :id="component.getColumnManagerModalId"
+                heading="Columns"
+                :width="component.getColumnManagerWidth ?? 'md'"
+            >
+                <twig:block name="content">
+                    <twig:SylamentTables:ColumnManagerContent
+                        :hostId="hostId"
+                        :items="columnManagerItems"
+                        :gridColumns="component.getColumnManagerColumns"
+                        :toggleable="columnManagerToggleable"
+                        :reorderable="component.hasReorderableColumns"
+                        :reorderAnimationDuration="component.getReorderAnimationDuration"
+                        :live="not columnManagerApplyVisible"
+                    />
+                </twig:block>
+
+                <twig:block name="footer">
+                    <div class="sy-modal-footer-actions">
+                        {% if columnManagerApplyVisible %}
+                            {{ renderComponent(columnManagerApplyAction) }}
+                        {% endif %}
+
+                        <twig:SylamentSupport:Button color="danger" size="sm" {{ ...columnManagerResetAttributes }}>Reset</twig:SylamentSupport:Button>
                     </div>
                 </twig:block>
             </twig:SylamentSupport:Modal>
@@ -299,13 +476,15 @@
                 </div>
 
                 <div class="sy-ta-selection-indicator-actions-ctn">
-                    <twig:SylamentSupport:Link
-                        tag="button"
-                        color="primary"
-                        :hidden="true"
-                        {{ ...stimulus_target('sylament--tables--table', 'selectAll') }}
-                        {{ ...stimulus_action('sylament--tables--table', 'selectAll', 'click') }}
-                    >Select all{{ allSelectableCount is not null ? ' ' ~ allSelectableCount : '' }}</twig:SylamentSupport:Link>
+                    {% if not component.selectsGroupsOnly %}
+                        <twig:SylamentSupport:Link
+                            tag="button"
+                            color="primary"
+                            :hidden="true"
+                            {{ ...stimulus_target('sylament--tables--table', 'selectAll') }}
+                            {{ ...stimulus_action('sylament--tables--table', 'selectAll', 'click') }}
+                        >Select all{{ allSelectableCount is not null ? ' ' ~ allSelectableCount : '' }}</twig:SylamentSupport:Link>
+                    {% endif %}
 
                     <twig:SylamentSupport:Link
                         tag="button"
@@ -323,186 +502,441 @@
 
                 <span class="sy-ta-sr-only">Loading</span>
             </div>
-        {% elseif records is empty %}
-            {% if emptyState %}
-                {{ emptyState }}
-            {% else %}
-                <div class="sy-ta-empty-state" role="status">
-                    <div class="sy-ta-empty-state-content">
-                        <div class="sy-ta-empty-state-icon-bg">
-                            <twig:SylamentSupport:Icon
-                                :icon="emptyStateIcon ?? 'heroicons:x-mark'"
-                                :alias="emptyStateIcon ? null : constant('Sylament\\Tables\\Twig\\TablesIconAlias::EMPTY_STATE')"
-                                size="lg"
-                            />
-                        </div>
-                        <{{ emptyStateHeadingTag }} class="sy-ta-empty-state-heading">{{ component.getEmptyStateHeading }}</{{ emptyStateHeadingTag }}>
-                        {% if emptyStateDescription %}
-                            <p class="sy-ta-empty-state-description">{{ emptyStateDescription }}</p>
-                        {% endif %}
-
-                        {% if emptyStateActions is not empty %}
-                            <div class="sy-ta-empty-state-actions">
-                                {% for action in emptyStateActions %}
-                                    {{ renderComponent(action) }}
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            {% endif %}
         {% else %}
-            {% set actionsHeaderCell %}<th scope="col" aria-label="Actions" class="sy-ta-actions-header-cell sy-ta-empty-header-cell"></th>{% endset %}
+            {% if records is not empty or isSearchableByColumn %}
+                {% set actionsHeaderCell %}<th scope="col" aria-label="Actions" class="sy-ta-actions-header-cell sy-ta-empty-header-cell"></th>{% endset %}
 
-            {% set selectionHeaderCell %}
-                <th scope="col" class="sy-ta-selection-cell">
-                    <input {{ attrs({
-                        type: 'checkbox',
-                        class: 'sy-checkbox sy-ta-page-checkbox',
-                        'aria-label': 'Select/deselect all records on this page for bulk actions.',
-                    }, stimulus_target('sylament--tables--table', 'pageCheckbox'), stimulus_action('sylament--tables--table', 'togglePage', 'change')) }}>
-                </th>
-            {% endset %}
+                {% set selectionHeaderCell %}
+                    <th scope="col" class="sy-ta-selection-cell">
+                        {# The cell stays under `selectGroupsOnly()` so the column count holds; only
+                           the page-wide control it carries goes. #}
+                        {% if not component.selectsGroupsOnly %}
+                            <input {{ attrs({
+                                type: 'checkbox',
+                                class: 'sy-checkbox sy-ta-page-checkbox',
+                                'aria-label': 'Select/deselect all records on this page for bulk actions.',
+                            }, stimulus_target('sylament--tables--table', 'pageCheckbox'), stimulus_action('sylament--tables--table', 'togglePage', 'change')) }}>
+                        {% endif %}
+                    </th>
+                {% endset %}
 
-            <table {{ attrs({class: classes('sy-ta-table', {'sy-ta-table-reordering': isReordering})}) }}>
-                <thead>
-                    <tr>
-                        {% if isReordering %}<th scope="col" class="sy-ta-reorder-header-cell sy-ta-empty-header-cell"></th>{% endif %}
-                        {% if actionsBeforeCells %}{{ actionsHeaderCell }}{% endif %}
-                        {% if checkboxLeading %}{{ selectionHeaderCell }}{% endif %}
-                        {% if actionsBeforeColumns %}{{ actionsHeaderCell }}{% endif %}
-                        {% for column in columns %}
-                            {% set columnName = column.getName %}
-                            {% set isColumnSortable = column.isSortable and not isReordering %}
-                            {% set isColumnSorted = isColumnSortable and sortColumn == columnName %}
-                            <th
-                                scope="col"
-                                {{ attrs({
-                                    class: classes('sy-ta-header-cell', {'sy-ta-header-cell-sorted': isColumnSorted}),
-                                    'aria-sort': isColumnSortable ? (isColumnSorted ? (sortDirection == 'desc' ? 'descending' : 'ascending') : 'none') : null,
-                                }) }}
-                            >
-                                {% if isColumnSortable %}
-                                    <button
-                                        type="button"
-                                        class="sy-ta-header-cell-sort-btn"
-                                        {{ stimulus_action('live', 'action', parameters: {action: 'sortTable', column: columnName}) }}
-                                    >
-                                        {{ column.getLabel }}
-                                        <twig:SylamentSupport:Icon
-                                            :icon="isColumnSorted and sortDirection == 'asc' ? 'heroicons:chevron-up-20-solid' : 'heroicons:chevron-down-20-solid'"
-                                            :alias="isColumnSorted
-                                                ? (sortDirection == 'asc'
-                                                    ? constant('Sylament\\Tables\\Twig\\TablesIconAlias::HEADER_CELL_SORT_ASC_BUTTON')
-                                                    : constant('Sylament\\Tables\\Twig\\TablesIconAlias::HEADER_CELL_SORT_DESC_BUTTON'))
-                                                : constant('Sylament\\Tables\\Twig\\TablesIconAlias::HEADER_CELL_SORT_BUTTON')"
-                                        />
-                                    </button>
-                                {% else %}
-                                    {{ column.getLabel }}
+                {# The cells the header row spans: one per visible column, one for the record
+                   actions wherever they sit, and one for the checkbox in whichever position it
+                   takes. The reorder header cell is not counted — a drag nulls the grouping, so
+                   the two never coexist. #}
+                {% set columnsCount = columns|length + (hasRecordActions ? 1 : 0) + (checkboxLeading or checkboxTrailing ? 1 : 0) %}
+                {% set groupBoundaries = group is not null ? component.getLiveComponent.getTableRecordGroupBoundaries : {} %}
+
+                {# The summary band reads the records it aggregates, so every set here sits
+                   inside the loaded branch — the page figures are only asked for when a page
+                   row will carry them, and the all-table ones when an all-table row will. A
+                   drag reorders rows rather than changing them, so it publishes no band at
+                   all: `hasSummary` is where that gate lives, and every summary read and
+                   every summary row below inherits it from there. #}
+                {% set allSummaryQuery = component.getLiveComponent.getAllTableSummaryQuery %}
+                {% set hasSummary = not isReordering and component.hasSummary(allSummaryQuery) %}
+                {% set hasAllSummary = hasSummary and component.hasAllTableSummary %}
+                {% set isPageSummaryWanted = hasSummary and component.hasPageSummary and paginator is not null and paginator.hasPages %}
+                {% set pageSummaryQuery = isPageSummaryWanted ? component.getLiveComponent.getPageTableSummaryQuery : null %}
+
+                {# A page past the last one holds no records, so the page query has nothing to
+                   narrow itself to while the paginator still reports pages — the row is what
+                   the query proves rather than what the paginator claims. #}
+                {% set hasPageSummary = pageSummaryQuery is not null %}
+                {% set pageSummarySelectedState = hasPageSummary ? component.getLiveComponent.getTableSummarySelectedState(pageSummaryQuery) : {} %}
+                {% set allSummarySelectedState = hasAllSummary ? component.getLiveComponent.getTableSummarySelectedState(allSummaryQuery) : {} %}
+                {% set summaryColumns = isGroupsOnly ? columns|filter(column => column.getName != group.getColumn) : columns %}
+                {% set summaryPlaceholderCells = {
+                    actionsBeforeCells: actionsBeforeCells,
+                    actionsBeforeColumns: actionsBeforeColumns,
+                    actionsAfterColumns: actionsAfterColumns,
+                    actionsAfterCells: actionsAfterCells,
+                    checkboxLeading: checkboxLeading,
+                    checkboxTrailing: checkboxTrailing,
+                } %}
+
+                <table {{ attrs({class: classes('sy-ta-table', {'sy-ta-table-reordering': isReordering})}) }}>
+                    <thead>
+                        <tr>
+                            {% if isReordering and records is not empty %}<th scope="col" class="sy-ta-reorder-header-cell sy-ta-empty-header-cell"></th>{% endif %}
+                            {% if actionsBeforeCells %}{{ actionsHeaderCell }}{% endif %}
+                            {% if checkboxLeading %}{{ selectionHeaderCell }}{% endif %}
+                            {% if actionsBeforeColumns %}{{ actionsHeaderCell }}{% endif %}
+                            {% for column in columns %}
+                                {% set columnName = column.getName %}
+                                {% set columnLabel = column.getLabel %}
+                                {% set columnWidth = column.getWidth %}
+                                {% set columnHeaderTooltip = column.getHeaderTooltip %}
+                                {% set isColumnSortable = column.isSortable and not isReordering %}
+                                {% set isColumnSorted = isColumnSortable and sortColumn == columnName %}
+                                {% set columnHiddenFrom = column.getHiddenFrom %}
+                                {% set columnVisibleFrom = column.getVisibleFrom %}
+                                {% set columnResponsiveClasses = [
+                                    columnHiddenFrom ? columnHiddenFrom ~ ':sy-ta-hidden' : null,
+                                    columnVisibleFrom ? columnVisibleFrom ~ ':sy-ta-visible' : null,
+                                ] %}
+
+                                {# A markup label may hold interactive content, which is invalid inside a
+                                   button, so the sort control becomes a span naming all three events. #}
+                                {% set sortControlTag = columnLabel is markup ? 'span' : 'button' %}
+                                {% set sortParameters = {action: 'sortTable', column: columnName} %}
+                                {% set sortControlAttributes = sortControlTag == 'span'
+                                    ? {class: 'sy-ta-header-cell-sort-btn', role: 'button', tabindex: '0'}
+                                    : {class: 'sy-ta-header-cell-sort-btn', type: 'button'} %}
+                                {% set sortControlBindings = sortControlTag == 'span'
+                                    ? stimulus_action('live', 'action', 'click', sortParameters)
+                                        |stimulus_action('live', 'action', 'keydown.enter', sortParameters)
+                                        |stimulus_action('live', 'action', 'keydown.space', sortParameters)
+                                    : stimulus_action('live', 'action', parameters: sortParameters) %}
+
+                                <th
+                                    scope="col"
+                                    {{ attrs({
+                                        class: classes('sy-ta-header-cell', column.getHeaderCellClassName, {
+                                            'sy-growable': not columnWidth and column.canGrow(false),
+                                            'sy-wrapped': column.canHeaderWrap,
+                                            'sy-ta-header-cell-sorted': isColumnSorted,
+                                        }, column.getAlignmentClass, columnResponsiveClasses),
+                                        style: columnWidth ? 'width: ' ~ columnWidth : null,
+                                        'aria-sort': isColumnSortable ? (isColumnSorted ? (sortDirection == 'desc' ? 'descending' : 'ascending') : 'none') : null,
+                                        title: (columnHeaderTooltip is markup ? columnHeaderTooltip|striptags : columnHeaderTooltip) ?: null,
+                                    }, column.getExtraHeaderAttributes) }}
+                                >
+                                    {% if isColumnSortable %}
+                                        <{{ sortControlTag }} {{ attrs(sortControlAttributes, sortControlBindings) }}>
+                                            {{ columnLabel }}
+                                            <twig:SylamentSupport:Icon
+                                                :icon="isColumnSorted and sortDirection == 'asc' ? 'heroicons:chevron-up-20-solid' : 'heroicons:chevron-down-20-solid'"
+                                                :alias="isColumnSorted
+                                                    ? (sortDirection == 'asc'
+                                                        ? constant('Sylament\\Tables\\Twig\\TablesIconAlias::HEADER_CELL_SORT_ASC_BUTTON')
+                                                        : constant('Sylament\\Tables\\Twig\\TablesIconAlias::HEADER_CELL_SORT_DESC_BUTTON'))
+                                                    : constant('Sylament\\Tables\\Twig\\TablesIconAlias::HEADER_CELL_SORT_BUTTON')"
+                                            />
+                                        </{{ sortControlTag }}>
+                                    {% else %}
+                                        {{ columnLabel }}
+                                    {% endif %}
+                                </th>
+                            {% endfor %}
+                            {% if actionsAfterColumns %}{{ actionsHeaderCell }}{% endif %}
+                            {% if checkboxTrailing %}{{ selectionHeaderCell }}{% endif %}
+                            {% if actionsAfterCells %}{{ actionsHeaderCell }}{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody {{ attrs(isReordering ? stimulus_controller('sylament--support--sortable', {
+                        animationDuration: component.getReorderAnimationDuration,
+                    })|stimulus_action('sylament--tables--table', 'reorder', 'sylament--support--sortable:end') : null) }}>
+                        {% if isSearchableByColumn %}
+                            <tr class="sy-ta-column-search-row">
+                                {% if records is not empty %}
+                                    {% if isReordering %}
+                                        <td class="sy-ta-cell"></td>
+                                    {% else %}
+                                        {% if actionsBeforeCells %}<td class="sy-ta-cell"></td>{% endif %}
+                                        {% if checkboxLeading %}<td class="sy-ta-cell"></td>{% endif %}
+                                        {% if actionsBeforeColumns %}<td class="sy-ta-cell"></td>{% endif %}
+                                    {% endif %}
                                 {% endif %}
-                            </th>
-                        {% endfor %}
-                        {% if actionsAfterColumns %}{{ actionsHeaderCell }}{% endif %}
-                        {% if checkboxTrailing %}{{ selectionHeaderCell }}{% endif %}
-                        {% if actionsAfterCells %}{{ actionsHeaderCell }}{% endif %}
-                    </tr>
-                </thead>
-                <tbody {{ attrs(isReordering ? stimulus_controller('sylament--support--sortable', {
-                    animationDuration: component.getReorderAnimationDuration,
-                })|stimulus_action('sylament--tables--table', 'reorder', 'sylament--support--sortable:end') : null) }}>
-                    {% for recordKey, record in records %}
-                        {% set recordUrl = component.getRecordUrl(record) %}
-                        {% set recordAction = component.getRecordAction(record) %}
-                        {% set openRecordUrlInNewTab = component.shouldOpenRecordUrlInNewTab(record) %}
-                        {% set recordLinkAttributes = recordUrl is not null ? component.getExtraRecordLinkAttributes(record) : {} %}
-                        {% set recordIsSelectable = isSelectionEnabled and component.isRecordSelectable(record) %}
 
-                        {% set actionsCell %}{% if hasRecordActions %}
-                            <td class="sy-ta-cell">
-                                <div class="sy-ta-actions">
-                                    {% for action in recordActionsByKey[recordKey] ?? [] %}
+                                {% for column in columns %}
+                                    {% set columnName = column.getName %}
+                                    {% set columnLabel = column.getLabel %}
+                                    {% set columnAriaLabel = (columnLabel is markup ? columnLabel|striptags : columnLabel)|trim ?: null %}
+                                    {% set isColumnIndividuallySearchable = column.isIndividuallySearchable %}
+                                    {% set columnHiddenFrom = column.getHiddenFrom %}
+                                    {% set columnVisibleFrom = column.getVisibleFrom %}
+                                    {% set columnSearchCellId = hostId ~ '.table.column-search.' ~ columnName %}
+
+                                    <td {{ attrs({
+                                        class: classes('sy-ta-cell', {'sy-ta-individual-search-cell': isColumnIndividuallySearchable}, [
+                                            columnHiddenFrom ? columnHiddenFrom ~ ':sy-ta-hidden' : null,
+                                            columnVisibleFrom ? columnVisibleFrom ~ ':sy-ta-visible' : null,
+                                        ]),
+                                        id: columnSearchCellId,
+                                    }) }}>
+                                        {% if isColumnIndividuallySearchable %}
+                                            <twig:SylamentTables:SearchField
+                                                :id="columnSearchCellId ~ '.input'"
+                                                :label="columnAriaLabel ? 'Search ' ~ columnAriaLabel : 'Search'"
+                                                :model="'tableColumnSearches.' ~ columnName"
+                                                :value="component.getLiveComponent.getTableColumnSearch(columnName)"
+                                                :onBlur="searchOnBlur"
+                                                :debounceMs="searchDebounceMs"
+                                            />
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+
+                                {% if not isReordering and records is not empty %}
+                                    {% if actionsAfterColumns %}<td class="sy-ta-cell"></td>{% endif %}
+                                    {% if checkboxTrailing %}<td class="sy-ta-cell"></td>{% endif %}
+                                    {% if actionsAfterCells %}<td class="sy-ta-cell"></td>{% endif %}
+                                {% endif %}
+                            </tr>
+                        {% endif %}
+
+                        {% for recordKey, record in records %}
+                            {% set recordUrl = component.getRecordUrl(record) %}
+                            {% set recordAction = component.getRecordAction(record) %}
+                            {% set openRecordUrlInNewTab = component.shouldOpenRecordUrlInNewTab(record) %}
+                            {% set recordLinkAttributes = recordUrl is not null ? component.getExtraRecordLinkAttributes(record) : {} %}
+                            {% set recordIsSelectable = isSelectionEnabled and component.isRecordSelectable(record) %}
+                            {% set boundary = groupBoundaries[recordKey] ?? null %}
+
+                            {% if boundary is not null and boundary.isFirstOfGroup and not isGroupsOnly %}
+                                {% set groupKey = boundary.key %}
+                                {% set groupTitle = boundary.title ~ '' %}
+                                {% set groupTitleText = (boundary.title is markup ? boundary.title|striptags : boundary.title) ~ '' %}
+                                {% set groupRowId = hostId ~ '.table.groups.' ~ ((groupKey ?? '')|url_encode) %}
+
+                                {% set groupSelectionCell %}{% if isSelectionEnabled %}
+                                    {% set groupKeys = component.getLiveComponent.getGroupedSelectableTableRecordKeys(groupKey) %}
+                                    {% set groupSelectedCount = groupKeys|filter(key => component.getLiveComponent.isTableRecordSelected(key))|length %}
+
+                                    <td class="sy-ta-cell sy-ta-group-selection-cell">
+                                        <input {{ attrs({
+                                            type: 'checkbox',
+                                            class: 'sy-checkbox sy-ta-group-checkbox',
+                                            id: groupRowId ~ '.checkbox',
+                                            checked: groupKeys is not empty and groupSelectedCount == groupKeys|length,
+                                            'data-sy-group-keys': groupKeys|json_encode,
+                                            'aria-label': 'Select/deselect every record in group ' ~ groupTitleText ~ ' for bulk actions.',
+                                        }, stimulus_target('sylament--tables--table', 'groupCheckbox'), stimulus_action('sylament--tables--table', 'toggleGroupRecords', 'change')) }}>
+                                    </td>
+                                {% endif %}{% endset %}
+
+                                <tr {{ attrs({
+                                    class: 'sy-ta-row sy-ta-group-header-row',
+                                    id: groupRowId,
+                                    'data-sy-group': groupTitle,
+                                }) }}>
+                                    {% if actionsBeforeCells and checkboxLeading %}<td class="sy-ta-cell"></td>{% endif %}
+                                    {% if checkboxLeading %}{{ groupSelectionCell }}{% endif %}
+
+                                    {# The row spans every cell the thead emits but the ones it lays
+                                       out itself — the checkbox cell, and the placeholder each of
+                                       the two two-cell cases needs beside it. #}
+                                    <td {{ attrs({
+                                        class: 'sy-ta-group-header-cell',
+                                        colspan: columnsCount
+                                            - (isSelectionEnabled ? 1 : 0)
+                                            - (isSelectionEnabled and checkboxLeading and hasRecordActions and actionsBeforeCells ? 1 : 0)
+                                            - (isSelectionEnabled and checkboxTrailing and hasRecordActions and actionsAfterCells ? 1 : 0),
+                                    }) }}>
+                                        <div {{ attrs({
+                                            class: classes('sy-ta-group-header', {
+                                                'sy-collapsible': groupCollapsible,
+                                                'sy-collapsed': groupsCollapsed,
+                                            }),
+                                        }, groupCollapsible ? stimulus_action('sylament--tables--table', 'toggleGroup', 'click') : null) }}>
+                                            <div>
+                                                <{{ emptyStateHeadingTag }} class="sy-ta-group-heading">
+                                                    {%- if groupLabelPrefix is not empty %}{{ groupLabelPrefix }}: {% endif -%}
+                                                    {{- boundary.title -}}
+                                                </{{ emptyStateHeadingTag }}>
+
+                                                {% if boundary.description is not empty %}
+                                                    <p class="sy-ta-group-description">{{ boundary.description }}</p>
+                                                {% endif %}
+                                            </div>
+
+                                            {% if groupCollapsible %}
+                                                <twig:SylamentSupport:IconButton
+                                                    icon="heroicons:chevron-up-20-solid"
+                                                    :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::GROUPING_COLLAPSE_BUTTON')"
+                                                    size="sm"
+                                                    color="gray"
+                                                    :label="groupLabelPrefix is not empty ? groupLabelPrefix ~ ': ' ~ groupTitleText : groupTitleText"
+                                                    :aria-expanded="groupsCollapsed ? 'false' : 'true'"
+                                                    {{ ...stimulus_action('sylament--tables--table', 'toggleGroup', 'click') }}
+                                                />
+                                            {% endif %}
+                                        </div>
+                                    </td>
+
+                                    {% if checkboxTrailing %}{{ groupSelectionCell }}{% if actionsAfterCells %}<td class="sy-ta-cell"></td>{% endif %}{% endif %}
+                                </tr>
+                            {% endif %}
+
+                            {% set actionsCell %}{% if hasRecordActions %}
+                                <td class="sy-ta-cell">
+                                    <div class="sy-ta-actions">
+                                        {% for action in recordActionsByKey[recordKey] ?? [] %}
+                                            {{ renderComponent(action) }}
+                                        {% endfor %}
+                                    </div>
+                                </td>
+                            {% endif %}{% endset %}
+
+                            {% set selectionCell %}{% if isSelectionEnabled %}
+                                <td class="sy-ta-cell sy-ta-selection-cell">
+                                    {% if recordIsSelectable %}
+                                        <input {{ attrs({
+                                            type: 'checkbox',
+                                            class: 'sy-checkbox sy-ta-record-checkbox',
+                                            value: recordKey,
+                                            checked: component.getLiveComponent.isTableRecordSelected(recordKey),
+                                            'aria-label': 'Select/deselect record ' ~ recordKey ~ ' for bulk actions.',
+                                        }, stimulus_target('sylament--tables--table', 'recordCheckbox'), stimulus_action('sylament--tables--table', 'toggleRecord', 'change')) }}>
+                                    {% endif %}
+                                </td>
+                            {% endif %}{% endset %}
+
+                            {% if not isGroupsOnly %}
+                                <tr {{ attrs({
+                                    class: classes('sy-ta-row', {
+                                        'sy-clickable': recordUrl is not null or recordAction is not null,
+                                        'sy-striped': isStriped and (boundary is not null ? boundary.indexInGroup is odd : loop.index0 is odd),
+                                        'sy-selected': recordIsSelectable and component.getLiveComponent.isTableRecordSelected(recordKey),
+                                        'sy-collapsed': groupsCollapsed,
+                                    }, component.getRecordClasses(record)),
+                                    id: hostId ~ '.table.records.' ~ recordKey,
+                                    'data-sortable-item': isReordering ? recordKey : null,
+                                    'data-sy-group': boundary is not null ? boundary.title ~ '' : null,
+                                }) }}>
+                                    {% if isReordering %}
+                                        <td class="sy-ta-cell sy-ta-reorder-handle-cell">
+                                            <twig:SylamentSupport:IconButton
+                                                class="sy-ta-reorder-handle"
+                                                icon="heroicons:bars-2"
+                                                :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::REORDER_HANDLE')"
+                                                color="gray"
+                                                :label="'Reorder item ' ~ recordKey"
+                                                :data-sortable-handle="true"
+                                            />
+                                        </td>
+                                    {% endif %}
+                                    {% if actionsBeforeCells %}{{ actionsCell }}{% endif %}
+                                    {% if checkboxLeading %}{{ selectionCell }}{% endif %}
+                                    {% if actionsBeforeColumns %}{{ actionsCell }}{% endif %}
+                                    {% for column in columns %}
+                                        {% do column.record(record) %}
+                                        {% do column.recordKey(recordKey) %}
+                                        {% do column.rowLoop(loop.parent.loop) %}
+
+                                        {% set columnName = column.getName %}
+                                        {% set columnAction = column.getAction %}
+                                        {% set columnActionKind = column.getActionKind %}
+                                        {% set columnUrl = column.getUrl %}
+                                        {% set columnHasStateBasedUrls = column.hasStateBasedUrls %}
+                                        {% set isColumnClickDisabled = column.isClickDisabled or isReordering %}
+                                        {% set columnHiddenFrom = column.getHiddenFrom %}
+                                        {% set columnVisibleFrom = column.getVisibleFrom %}
+
+                                        {# The column arms interleave with the record ones rather than sitting
+                                           above them: a column action suppresses the record url, a column url
+                                           does not suppress the record action, and a state-based url draws its
+                                           links inside the cell instead. #}
+                                        {% set cellWrapperTag = (columnUrl or (recordUrl is not null and columnAction is null)) and not columnHasStateBasedUrls and not isColumnClickDisabled
+                                            ? 'a'
+                                            : ((columnAction or recordAction is not null) and not columnHasStateBasedUrls and not isColumnClickDisabled
+                                                ? 'button'
+                                                : 'div') %}
+
+                                        {% if cellWrapperTag == 'a' %}
+                                            {% set cellWrapperAttributes = {
+                                                ...(columnUrl is null and recordUrl is not null ? recordLinkAttributes : {}),
+                                                href: columnUrl ?: recordUrl,
+                                                ...((columnUrl ? column.shouldOpenUrlInNewTab : openRecordUrlInNewTab) ? {target: '_blank'} : {}),
+                                            } %}
+                                        {% elseif cellWrapperTag == 'button' %}
+                                            {% set cellWrapperAttributes = {
+                                                type: 'button',
+                                                'data-loading': 'addAttribute(disabled)',
+                                                ...stimulus_action('live', 'action', parameters: columnActionKind == 'action'
+                                                    ? {action: 'mountAction', name: columnAction.getName, context: {recordKey: recordKey ~ '', table: true}}
+                                                    : (columnActionKind == 'closure'
+                                                        ? {action: 'callTableColumnAction', name: columnName, recordKey: recordKey ~ ''}
+                                                        : (component.getAction(recordAction)
+                                                            ? {action: 'mountAction', name: recordAction, context: {recordKey: recordKey ~ '', table: true}}
+                                                            : {action: recordAction, recordKey: recordKey ~ ''}))),
+                                            } %}
+                                        {% else %}
+                                            {% set cellWrapperAttributes = {} %}
+                                        {% endif %}
+
+                                        <td {{ attrs({
+                                            class: classes('sy-ta-cell', column.getCellClassName, column.getAlignmentClass, column.getVerticalAlignmentClass, [
+                                                columnHiddenFrom ? columnHiddenFrom ~ ':sy-ta-hidden' : null,
+                                                columnVisibleFrom ? columnVisibleFrom ~ ':sy-ta-visible' : null,
+                                            ]),
+                                            id: hostId ~ '.table.record.' ~ recordKey ~ '.column.' ~ columnName,
+                                        }, column.getExtraCellAttributes) }}>
+                                            <{{ cellWrapperTag }} {{ attrs({
+                                                class: classes('sy-ta-col', {'sy-ta-col-has-column-url': cellWrapperTag == 'a' and columnUrl}),
+                                            }, cellWrapperAttributes) }}>{{ renderComponent(column) }}</{{ cellWrapperTag }}>
+                                        </td>
+                                    {% endfor %}
+                                    {% if actionsAfterColumns %}{{ actionsCell }}{% endif %}
+                                    {% if checkboxTrailing %}{{ selectionCell }}{% endif %}
+                                    {% if actionsAfterCells %}{{ actionsCell }}{% endif %}
+                                </tr>
+                            {% endif %}
+
+                            {% if hasSummary and boundary is not null and boundary.isLastOfGroup and (isGroupsOnly or (boundary.title ~ '') != '') %}
+                                {% set groupSummaryQuery = component.getLiveComponent.getGroupedTableSummaryQuery(record) %}
+
+                                <twig:SylamentTables:SummaryRow
+                                    :id="hostId ~ '.table.group-summary.' ~ ((boundary.key ?? '')|url_encode)"
+                                    :columns="summaryColumns"
+                                    :heading="isGroupsOnly ? boundary.title : boundary.title ~ ' summary'"
+                                    :query="groupSummaryQuery"
+                                    :selectedState="component.getLiveComponent.getTableSummarySelectedState(groupSummaryQuery)"
+                                    :groupsOnly="isGroupsOnly"
+                                    {{ ...summaryPlaceholderCells }}
+                                />
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if hasSummary %}
+                            <twig:SylamentTables:Summary
+                                :id="hostId ~ '.table.summary'"
+                                :columns="summaryColumns"
+                                :pluralRecordLabel="component.getPluralRecordLabel"
+                                :pageQuery="pageSummaryQuery"
+                                :allQuery="allSummaryQuery"
+                                :pageSelectedState="pageSummarySelectedState"
+                                :allSelectedState="allSummarySelectedState"
+                                :hasPageSummary="hasPageSummary"
+                                :hasAllSummary="hasAllSummary"
+                                :groupsOnly="isGroupsOnly"
+                                {{ ...summaryPlaceholderCells }}
+                            />
+                        {% endif %}
+                    </tbody>
+                </table>
+            {% endif %}
+
+            {% if records is empty %}
+                {% if emptyState %}
+                    {{ emptyState }}
+                {% else %}
+                    <div class="sy-ta-empty-state" role="status">
+                        <div class="sy-ta-empty-state-content">
+                            <div class="sy-ta-empty-state-icon-bg">
+                                <twig:SylamentSupport:Icon
+                                    :icon="emptyStateIcon ?? 'heroicons:x-mark'"
+                                    :alias="emptyStateIcon ? null : constant('Sylament\\Tables\\Twig\\TablesIconAlias::EMPTY_STATE')"
+                                    size="lg"
+                                />
+                            </div>
+                            <{{ emptyStateHeadingTag }} class="sy-ta-empty-state-heading">{{ component.getEmptyStateHeading }}</{{ emptyStateHeadingTag }}>
+                            {% if emptyStateDescription %}
+                                <p class="sy-ta-empty-state-description">{{ emptyStateDescription }}</p>
+                            {% endif %}
+
+                            {% if emptyStateActions is not empty %}
+                                <div class="sy-ta-empty-state-actions">
+                                    {% for action in emptyStateActions %}
                                         {{ renderComponent(action) }}
                                     {% endfor %}
                                 </div>
-                            </td>
-                        {% endif %}{% endset %}
-
-                        {% set selectionCell %}{% if isSelectionEnabled %}
-                            <td class="sy-ta-cell sy-ta-selection-cell">
-                                {% if recordIsSelectable %}
-                                    <input {{ attrs({
-                                        type: 'checkbox',
-                                        class: 'sy-checkbox sy-ta-record-checkbox',
-                                        value: recordKey,
-                                        checked: component.getLiveComponent.isTableRecordSelected(recordKey),
-                                        'aria-label': 'Select/deselect record ' ~ recordKey ~ ' for bulk actions.',
-                                    }, stimulus_target('sylament--tables--table', 'recordCheckbox'), stimulus_action('sylament--tables--table', 'toggleRecord', 'change')) }}>
-                                {% endif %}
-                            </td>
-                        {% endif %}{% endset %}
-
-                        <tr {{ attrs({
-                            class: classes('sy-ta-row', {
-                                'sy-clickable': recordUrl is not null or recordAction is not null,
-                                'sy-striped': isStriped and loop.index0 is odd,
-                                'sy-selected': recordIsSelectable and component.getLiveComponent.isTableRecordSelected(recordKey),
-                            }, component.getRecordClasses(record)),
-                            id: hostId ~ '.table.records.' ~ recordKey,
-                            'data-sortable-item': isReordering ? recordKey : null,
-                        }) }}>
-                            {% if isReordering %}
-                                <td class="sy-ta-cell sy-ta-reorder-handle-cell">
-                                    <twig:SylamentSupport:IconButton
-                                        class="sy-ta-reorder-handle"
-                                        icon="heroicons:bars-2"
-                                        :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::REORDER_HANDLE')"
-                                        color="gray"
-                                        :label="'Reorder item ' ~ recordKey"
-                                        :data-sortable-handle="true"
-                                    />
-                                </td>
                             {% endif %}
-                            {% if actionsBeforeCells %}{{ actionsCell }}{% endif %}
-                            {% if checkboxLeading %}{{ selectionCell }}{% endif %}
-                            {% if actionsBeforeColumns %}{{ actionsCell }}{% endif %}
-                            {% for column in columns %}
-                                {% do column.record(record) %}
-                                {% do column.recordKey(recordKey) %}
-
-                                {# Column-level url/action arms slot in above the record-level ones — M4 · 4 #}
-                                {% set cellWrapperTag = isReordering
-                                    ? 'div'
-                                    : (recordUrl is not null
-                                        ? 'a'
-                                        : (recordAction is not null ? 'button' : 'div')) %}
-                                {% set cellWrapperAttributes = cellWrapperTag == 'a'
-                                    ? {
-                                        ...recordLinkAttributes,
-                                        href: recordUrl,
-                                        ...(openRecordUrlInNewTab ? {target: '_blank'} : {}),
-                                    }
-                                    : (cellWrapperTag == 'button'
-                                        ? {
-                                            type: 'button',
-                                            'data-loading': 'addAttribute(disabled)',
-                                            ...stimulus_action('live', 'action', parameters: component.getAction(recordAction)
-                                                ? {action: 'mountAction', name: recordAction, context: {recordKey: recordKey ~ '', table: true}}
-                                                : {action: recordAction, recordKey: recordKey ~ ''}),
-                                        }
-                                        : {}) %}
-
-                                <td class="sy-ta-cell" id="{{ hostId ~ '.table.record.' ~ recordKey ~ '.column.' ~ column.getName }}">
-                                    <{{ cellWrapperTag }} {{ attrs({class: 'sy-ta-col'}, cellWrapperAttributes) }}>{{ renderComponent(column) }}</{{ cellWrapperTag }}>
-                                </td>
-                            {% endfor %}
-                            {% if actionsAfterColumns %}{{ actionsCell }}{% endif %}
-                            {% if checkboxTrailing %}{{ selectionCell }}{% endif %}
-                            {% if actionsAfterCells %}{{ actionsCell }}{% endif %}
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        </div>
+                    </div>
+                {% endif %}
+            {% endif %}
         {% endif %}
 
         {% if filtersBelowContent %}

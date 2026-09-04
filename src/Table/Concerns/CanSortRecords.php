@@ -54,6 +54,10 @@ trait CanSortRecords
             return null;
         }
 
+        if ($column->isHidden()) {
+            return null;
+        }
+
         if (!$column->isSortable()) {
             return null;
         }

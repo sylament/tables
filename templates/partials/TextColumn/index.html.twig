@@ -1,78 +1,174 @@
 {% set items = component.getStateItems %}
+{% set placeholder = component.getPlaceholder %}
+{% set emptyTooltip = component.getEmptyTooltip %}
+
 {% set isBadge = component.isBadge %}
+{% set isBulleted = component.isBulleted %}
+{% set isListWithLineBreaks = component.isListWithLineBreaks %}
+{% set listLimit = component.getListLimit %}
+{% set overLimitCount = component.getStateOverListLimitCount %}
+{# The toggles render only where the values they reveal survived the slice — the one shape
+   `getStateItems()` keeps whole. Everywhere else the message is the static count. #}
+{% set isExpandable = overLimitCount > 0 and component.isLimitedListExpandable and isListWithLineBreaks %}
+{% set isList = items|length > 1 or isBulleted %}
+
 {% set descriptionAbove = component.getDescriptionAbove %}
 {% set descriptionBelow = component.getDescriptionBelow %}
 {% set hasDescriptions = descriptionAbove is filled or descriptionBelow is filled %}
+
 {% set lineClamp = component.getLineClamp %}
 {% set iconPositionValue = component.getIconPosition.value %}
 {% set fontFamilyClass = component.getFontFamilyClass %}
 {% set weightClass = component.getWeightClass %}
 {% set alignmentClass = component.getAlignmentClass %}
+{% set shouldOpenUrlInNewTab = component.shouldOpenUrlInNewTab %}
 
-<div {{ attrs({
-    class: [
-        'sy',
-        'sy-ta-text',
-        alignmentClass,
-        isBadge ? 'sy-ta-text-has-badges' : null,
-        component.canWrap ? 'sy-wrapped' : null,
-        hasDescriptions ? 'sy-ta-text-has-descriptions' : null,
-    ],
-}) }}>
-    {%- if descriptionAbove is filled -%}
-        <p class="sy-ta-text-description">{{ descriptionAbove }}</p>
-    {%- endif -%}
+{% set clipboardController = 'sylament--support--clipboard' %}
+{% set listController = 'sylament--tables--limited-list' %}
+{% set listStimulus = isExpandable ? stimulus_controller(listController, {expanded: false}) : null %}
 
-    {%- for item in items -%}
-        {%- set itemColor = component.getColor(item.state) -%}
-        {%- set itemSize = component.getSize(item.state) -%}
-        {%- set itemSizeValue = itemSize.value ?? itemSize -%}
-        {%- set itemIcon = component.getIcon(item.state) -%}
-        {%- set itemIconSize = itemSizeValue in ['md', 'lg'] ? itemSizeValue : 'sm' -%}
-        {%- set iconColorAttrs = colorAttributes('Sylament\\Tables\\Colors\\Components\\TextColumnComponent\\ItemComponent\\IconComponent', component.getIconColor(item.state)) -%}
-        {%- set iconHtml = isBadge ? null : generateIconHtml(
-            itemIcon,
-            attributes: {
-                'aria-hidden': 'true',
-                class: ['sy-ta-text-icon-' ~ iconPositionValue, ...iconColorAttrs.class],
-                style: iconColorAttrs.style,
-            },
-            size: itemIconSize,
-        ) -%}
-        {%- set itemColorAttrs = isBadge
-            ? {class: [], style: []}
-            : colorAttributes('Sylament\\Tables\\Colors\\Components\\TextColumnComponent\\ItemComponent', itemColor) -%}
+{% set rootClasses = [
+    'sy',
+    'sy-ta-text',
+    alignmentClass,
+    component.isInline ? 'sy-inline' : null,
+] %}
 
-        <span {{ attrs({
-            class: [
-                'sy-ta-text-item',
-                fontFamilyClass,
-                isBadge ? null : component.getSizeClass(item.state),
-                isBadge ? null : weightClass,
-                itemColorAttrs.class,
-            ],
-            style: [
-                lineClamp ? '--sy-line-clamp: ' ~ lineClamp : null,
-                itemColorAttrs.style,
-            ],
-        }) }}>
-            {%- if isBadge -%}
-                <twig:SylamentSupport:Badge
-                    :color="itemColor ?? 'primary'"
-                    :size="itemSizeValue"
-                    :icon="itemIcon"
-                    :iconSize="itemIconSize"
-                    :iconPosition="iconPositionValue"
-                >{{- item.content -}}</twig:SylamentSupport:Badge>
-            {%- else -%}
-                {%- if iconHtml and iconPositionValue == 'before' -%}{{ iconHtml }}{%- endif -%}
-                {{- item.content -}}
-                {%- if iconHtml and iconPositionValue == 'after' -%}{{ iconHtml }}{%- endif -%}
-            {%- endif -%}
-        </span>
-    {%- endfor -%}
+{% if items is empty %}
+    <div {{ attrs({
+        class: rootClasses,
+        title: (emptyTooltip is markup ? emptyTooltip|striptags : emptyTooltip) ?: null,
+    }, component.getExtraAttributes) }}>
+        {%- if placeholder is not empty -%}
+            <p class="sy-ta-placeholder">{{ placeholder }}</p>
+        {%- endif -%}
+    </div>
+{% else %}
+    <div {{ attrs({
+        class: [
+            ...rootClasses,
+            isBadge ? 'sy-ta-text-has-badges' : null,
+            component.canWrap ? 'sy-wrapped' : null,
+            isBulleted ? 'sy-bulleted' : null,
+            isListWithLineBreaks ? 'sy-ta-text-has-line-breaks' : null,
+            hasDescriptions ? 'sy-ta-text-has-descriptions' : null,
+            overLimitCount > 0 ? 'sy-ta-text-list-limited' : null,
+        ],
+    }, component.getExtraAttributes, listStimulus) }}>
+        {%- if descriptionAbove is filled -%}
+            <p class="sy-ta-text-description">{{ descriptionAbove }}</p>
+        {%- endif -%}
 
-    {%- if descriptionBelow is filled -%}
-        <p class="sy-ta-text-description">{{ descriptionBelow }}</p>
-    {%- endif -%}
-</div>
+        {%- if isList -%}<ul>{%- endif -%}
+
+        {%- for item in items -%}
+            {%- set isOverLimit = isExpandable and loop.index > listLimit -%}
+            {%- set itemColor = component.getColor(item.state) -%}
+            {%- set itemSize = component.getSize(item.state) -%}
+            {%- set itemSizeValue = itemSize.value ?? itemSize -%}
+            {%- set itemIcon = component.getIcon(item.state) -%}
+            {%- set itemIconSize = itemSizeValue in ['md', 'lg'] ? itemSizeValue : 'sm' -%}
+            {%- set itemTooltip = component.getTooltip(item.state) -%}
+            {%- set itemUrl = component.getUrl(item.state) -%}
+            {%- set isCopyable = component.isCopyable(item.state) -%}
+            {%- set iconColorAttrs = colorAttributes('Sylament\\Tables\\Colors\\Components\\TextColumnComponent\\ItemComponent\\IconComponent', component.getIconColor(item.state)) -%}
+            {%- set iconHtml = isBadge ? null : generateIconHtml(
+                itemIcon,
+                attributes: {
+                    'aria-hidden': 'true',
+                    class: ['sy-ta-text-icon-' ~ iconPositionValue, ...iconColorAttrs.class],
+                    style: iconColorAttrs.style,
+                },
+                size: itemIconSize,
+            ) -%}
+            {%- set itemColorAttrs = isBadge
+                ? {class: [], style: []}
+                : colorAttributes('Sylament\\Tables\\Colors\\Components\\TextColumnComponent\\ItemComponent', itemColor) -%}
+            {%- set copyStimulus = isCopyable ? stimulus_controller(clipboardController, {
+                text: component.getCopyableState(item.state) ?? item.content,
+                message: component.getCopyMessage(item.state),
+                duration: component.getCopyMessageDuration(item.state),
+            })|stimulus_action(clipboardController, 'copy', 'click')
+                |stimulus_action(clipboardController, 'copy', 'keydown.enter')
+                |stimulus_action(clipboardController, 'copy', 'keydown.space') : null -%}
+            {# The copy handler and the tooltip ride one element around the content alone, the icon
+               staying a direct child of the item — so one icon rule reaches it at every depth, and
+               the copy target is the text rather than the whole line. #}
+            {%- set contentAttributes = isCopyable or itemTooltip is filled
+                ? {
+                    ...(isCopyable ? {role: 'button', class: 'sy-copyable', ...copyStimulus.toArray} : {}),
+                    ...(itemTooltip is filled ? {title: itemTooltip is markup ? itemTooltip|striptags : itemTooltip} : {}),
+                }
+                : null -%}
+
+            <{{ isList ? 'li' : 'span' }} {{ attrs({
+                class: [
+                    'sy-ta-text-item',
+                    fontFamilyClass,
+                    isBadge ? null : component.getSizeClass(item.state),
+                    isBadge ? null : weightClass,
+                    itemColorAttrs.class,
+                ],
+                style: [
+                    lineClamp ? '--sy-line-clamp: ' ~ lineClamp : null,
+                    itemColorAttrs.style,
+                ],
+                hidden: isOverLimit,
+                'data-over-limit': isOverLimit,
+            }) }}>
+                {%- if isBadge -%}
+                    <twig:SylamentSupport:Badge
+                        :color="itemColor ?? 'primary'"
+                        :size="itemSizeValue"
+                        :icon="itemIcon"
+                        :iconSize="itemIconSize"
+                        :iconPosition="iconPositionValue"
+                        {{ ...(contentAttributes ?? {}) }}
+                    >{{- item.content -}}</twig:SylamentSupport:Badge>
+                {%- else -%}
+                    {%- if iconHtml and iconPositionValue == 'before' -%}{{ iconHtml }}{%- endif -%}
+                    {%- if contentAttributes -%}<span {{ attrs(contentAttributes) }}>{%- endif -%}
+                    {%- if itemUrl -%}
+                        <a {{ attrs({href: itemUrl, target: shouldOpenUrlInNewTab ? '_blank' : null}) }}>{{- item.content -}}</a>
+                    {%- else -%}
+                        {{- item.content -}}
+                    {%- endif -%}
+                    {%- if contentAttributes -%}</span>{%- endif -%}
+                    {%- if iconHtml and iconPositionValue == 'after' -%}{{ iconHtml }}{%- endif -%}
+                {%- endif -%}
+            </{{ isList ? 'li' : 'span' }}>
+        {%- endfor -%}
+
+        {%- if isList -%}</ul>{%- endif -%}
+
+        {%- if overLimitCount > 0 -%}
+            <div class="sy-ta-text-list-limited-message">
+                {%- if isExpandable -%}
+                    <span {{ attrs({
+                        role: 'button',
+                        class: 'sy-link sy-size-xs',
+                        'aria-expanded': 'false',
+                    }, stimulus_target(listController, 'expandToggle')
+                        |stimulus_action(listController, 'expand', 'click')
+                        |stimulus_action(listController, 'expand', 'keydown.enter')
+                        |stimulus_action(listController, 'expand', 'keydown.space')) }}>Show {{ overLimitCount }} more</span>
+                    <span {{ attrs({
+                        role: 'button',
+                        class: 'sy-link sy-size-xs',
+                        'aria-expanded': 'false',
+                        hidden: true,
+                    }, stimulus_target(listController, 'collapseToggle')
+                        |stimulus_action(listController, 'collapse', 'click')
+                        |stimulus_action(listController, 'collapse', 'keydown.enter')
+                        |stimulus_action(listController, 'collapse', 'keydown.space')) }}>Show {{ overLimitCount }} less</span>
+                {%- else -%}
+                    and {{ overLimitCount }} more
+                {%- endif -%}
+            </div>
+        {%- endif -%}
+
+        {%- if descriptionBelow is filled -%}
+            <p class="sy-ta-text-description">{{ descriptionBelow }}</p>
+        {%- endif -%}
+    </div>
+{% endif %}

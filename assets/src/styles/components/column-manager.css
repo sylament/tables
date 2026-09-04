@@ -1,0 +1,52 @@
+.sy-ta-col-manager {
+    @apply grid gap-4;
+
+    & .sy-ta-col-manager-header {
+        @apply flex items-center justify-between gap-x-3;
+    }
+
+    & .sy-ta-col-manager-heading {
+        @apply text-base leading-6 font-semibold text-gray-950 dark:text-white;
+    }
+
+    & .sy-ta-col-manager-actions-ctn {
+        @apply flex flex-wrap items-center gap-3;
+    }
+}
+
+/* Top level rather than nested inside `.sy-ta-col-manager`, as vendor's is: the
+   modal layout renders the content component without that wrapper. */
+.sy-ta-col-manager-items {
+    @apply -mt-6 gap-x-6;
+
+    & .sy-ta-col-manager-item {
+        @apply flex break-inside-avoid items-center gap-3 pt-6;
+
+        @supports (overflow-clip-margin: 1px) {
+            overflow: clip;
+            overflow-clip-margin: 10px;
+        }
+
+        & .sy-ta-col-manager-label {
+            @apply flex w-full flex-1 items-center gap-x-3 text-sm font-medium text-gray-950 dark:text-white;
+
+            & .sy-checkbox {
+                @apply shrink-0;
+            }
+        }
+
+        & .sy-ta-col-manager-reorder-handle {
+            @apply cursor-move;
+        }
+    }
+}
+
+.sy-ta-col-manager-dropdown {
+    & > .sy-dropdown-panel {
+        width: var(--sy-dropdown-width, 20rem);
+    }
+
+    & .sy-ta-col-manager {
+        @apply p-6;
+    }
+}

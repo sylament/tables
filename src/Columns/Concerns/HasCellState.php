@@ -14,6 +14,10 @@ trait HasCellState
 {
     protected mixed $getStateUsing = null;
 
+    protected mixed $defaultState = null;
+
+    protected string|Closure|null $separator = null;
+
     protected bool|Closure $isDistinctList = false;
 
     /**
@@ -33,6 +37,30 @@ trait HasCellState
     public function state(mixed $state): static
     {
         return $this->getStateUsing($state);
+    }
+
+    public function default(mixed $state): static
+    {
+        $this->defaultState = $state;
+
+        return $this;
+    }
+
+    public function getDefaultState(): mixed
+    {
+        return $this->evaluate($this->defaultState);
+    }
+
+    public function separator(string|Closure|null $separator = ','): static
+    {
+        $this->separator = $separator;
+
+        return $this;
+    }
+
+    public function getSeparator(): ?string
+    {
+        return $this->evaluate($this->separator);
     }
 
     public function distinctList(bool|Closure $condition = true): static
@@ -64,9 +92,20 @@ trait HasCellState
 
     protected function resolveState(): mixed
     {
-        return ($this->getStateUsing !== null)
+        $state = ($this->getStateUsing !== null)
             ? $this->evaluate($this->getStateUsing)
             : $this->getStateFromRecord();
+
+        if (is_string($state) && ($separator = $this->getSeparator())) {
+            $parts = explode($separator, $state);
+            $state = count($parts) === 1 && mb_trim($parts[0]) === '' ? [] : $parts;
+        }
+
+        if (blank($state)) {
+            return $this->getDefaultState();
+        }
+
+        return $state;
     }
 
     /**

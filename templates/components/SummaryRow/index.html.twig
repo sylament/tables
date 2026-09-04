@@ -1,0 +1,94 @@
+{% props
+    id = null,
+
+    columns = [],
+    heading = null,
+
+    query = null,
+    selectedState = {},
+
+    extraHeadingColumn = false,
+    placeholderColumns = true,
+    groupsOnly = false,
+    striped = false,
+
+    actionsBeforeCells = false,
+    actionsBeforeColumns = false,
+    actionsAfterColumns = false,
+    actionsAfterCells = false,
+    checkboxLeading = false,
+    checkboxTrailing = false
+%}
+
+{# The query is constant for this row, so each column's resolved summarizers are
+   too — resolved once here rather than in every loop guard below, because
+   resolving runs each summarizer's visibility check and that hashes the query. #}
+{% set summarizersByColumn = {} %}
+{% for column in columns %}
+    {% set summarizersByColumn = summarizersByColumn|merge({(column.getName): column.getSummarizers(query)}) %}
+{% endfor %}
+
+{% set hasOwnHeadingCell = extraHeadingColumn or groupsOnly %}
+
+{# The heading cell spans from the first column to the first summarized one, so
+   the span is pre-initialised rather than only defined in the branch that
+   widens it — vendor leans on PHP's short-circuit where Twig would throw. #}
+{% set headingColumnSpan = 1 %}
+{% set headingSpanClosed = hasOwnHeadingCell %}
+{% for column in columns %}
+    {% if not loop.first and not headingSpanClosed %}
+        {% if summarizersByColumn[column.getName] is not empty %}
+            {% set headingSpanClosed = true %}
+        {% else %}
+            {% set headingColumnSpan = headingColumnSpan + 1 %}
+        {% endif %}
+    {% endif %}
+{% endfor %}
+
+<tr {{ attrs({
+    class: classes('sy-ta-row sy-ta-summary-row', {'sy-striped': striped}),
+    id: id,
+}) }}>
+    {% if placeholderColumns and actionsBeforeCells %}<td class="sy-ta-cell"></td>{% endif %}
+    {% if placeholderColumns and checkboxLeading %}<td class="sy-ta-cell"></td>{% endif %}
+    {% if placeholderColumns and actionsBeforeColumns %}<td class="sy-ta-cell"></td>{% endif %}
+
+    {% if hasOwnHeadingCell %}
+        <th scope="row" class="sy-ta-cell sy-ta-summary-row-heading-cell sy-align-start">{{ heading }}</th>
+    {% endif %}
+
+    {% for column in columns %}
+        {% set columnSummarizers = summarizersByColumn[column.getName] %}
+        {% set isHeadingCell = loop.first and not hasOwnHeadingCell %}
+        {% set columnHiddenFrom = column.getHiddenFrom %}
+        {% set columnVisibleFrom = column.getVisibleFrom %}
+
+        {% if (isHeadingCell or hasOwnHeadingCell or loop.index > headingColumnSpan)
+            and (placeholderColumns or columnSummarizers is not empty) %}
+            {# The leading cell labels the whole row, so it is a row header; the value
+               cells stay `<td>` and take their row association from it. #}
+            <{{ isHeadingCell ? 'th' : 'td' }} {{ attrs({
+                scope: isHeadingCell ? 'row' : null,
+                colspan: isHeadingCell and headingColumnSpan > 1 ? headingColumnSpan : null,
+                class: classes('sy-ta-cell', isHeadingCell ? 'sy-align-start' : (column.getAlignmentClass ?? 'sy-align-start'), {
+                    'sy-ta-summary-row-heading-cell': isHeadingCell,
+                }, [
+                    columnHiddenFrom ? columnHiddenFrom ~ ':sy-ta-hidden' : null,
+                    columnVisibleFrom ? columnVisibleFrom ~ ':sy-ta-visible' : null,
+                ]),
+            }) }}>
+                {%- if isHeadingCell -%}
+                    {{ heading }}
+                {%- elseif columnSummarizers is not empty -%}
+                    {%- for summarizer in columnSummarizers -%}
+                        {{- renderComponent(summarizer.query(query).selectedState(selectedState)) -}}
+                    {%- endfor -%}
+                {%- endif -%}
+            </{{ isHeadingCell ? 'th' : 'td' }}>
+        {% endif %}
+    {% endfor %}
+
+    {% if placeholderColumns and actionsAfterColumns %}<td class="sy-ta-cell"></td>{% endif %}
+    {% if placeholderColumns and checkboxTrailing %}<td class="sy-ta-cell"></td>{% endif %}
+    {% if placeholderColumns and actionsAfterCells %}<td class="sy-ta-cell"></td>{% endif %}
+</tr>

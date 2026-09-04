@@ -1,0 +1,43 @@
+.sy-ta-icon {
+    @apply flex w-full gap-1.5;
+
+    &.sy-wrapped {
+        @apply flex-wrap;
+    }
+
+    &.sy-ta-icon-has-line-breaks {
+        @apply flex-col;
+    }
+
+    &:not(.sy-inline) {
+        @apply px-3 py-4;
+    }
+
+    &.sy-align-start,
+    &.sy-align-left {
+        @apply justify-start;
+    }
+
+    &.sy-align-center {
+        @apply justify-center;
+    }
+
+    &.sy-align-end,
+    &.sy-align-right {
+        @apply justify-end;
+    }
+
+    &.sy-align-justify,
+    &.sy-align-between {
+        @apply justify-between;
+    }
+
+    & > .sy-icon,
+    & > a > .sy-icon {
+        @apply text-gray-400 dark:text-gray-500;
+
+        &.sy-color {
+            @apply text-(--sy-text) dark:text-(--sy-dark-text);
+        }
+    }
+}

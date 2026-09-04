@@ -1,0 +1,33 @@
+{% set state = component.getClientState %}
+{% set error = component.getUpdateStateError %}
+{% set isDisabled = component.isDisabled %}
+{% set tooltip = component.getTooltip(component.getState) %}
+{% set label = component.getLabel %}
+{% set ariaLabel = (label is markup ? label|striptags : label)|trim ?: null %}
+
+<div {{ attrs({
+    class: [
+        'sy',
+        'sy-ta-checkbox',
+        component.getAlignmentClass,
+        component.isInline ? 'sy-inline' : null,
+    ],
+    title: (tooltip is markup ? tooltip|striptags : tooltip) ?: null,
+}, component.getExtraAttributes, stimulus_controller('sylament--tables--editable-cell', {
+    column: component.getName,
+    record: component.getRecordKey ?? '',
+    state: state,
+})) }}>
+    <input {{ attrs({
+        type: 'checkbox',
+        class: 'sy-checkbox',
+        'aria-label': ariaLabel,
+        'aria-invalid': error is not null ? true : null,
+        checked: state == '1',
+        disabled: isDisabled,
+    }, component.getExtraInputAttributes, stimulus_action('sylament--tables--editable-cell', 'commit', 'change')) }}>
+
+    {% if error is not null %}
+        <p class="sy-ta-cell-error">{{ error.message }}</p>
+    {% endif %}
+</div>

@@ -1,0 +1,57 @@
+{% props
+    hostId = null,
+
+    items = [],
+    gridColumns = 1,
+    toggleable = false,
+    reorderable = false,
+    reorderAnimationDuration = 300,
+
+    live = false
+%}
+
+{% set controller = 'sylament--tables--column-manager' %}
+{% set sortableController = 'sylament--support--sortable' %}
+{% set listAttributes = reorderable
+    ? stimulus_controller(sortableController, {
+        animationDuration: reorderAnimationDuration,
+    })|stimulus_action(controller, 'reorder', sortableController ~ ':end')
+    : null %}
+
+<div {{ attrs({class: 'sy sy-ta-col-manager-content'}, stimulus_controller(controller, {live: live})) }}>
+    <div {{ attrs({class: 'sy-ta-col-manager-items'}, grid(gridColumns, constant('Sylament\\Support\\Enums\\GridDirection::Column')), listAttributes) }}>
+        {% for item in items %}
+            <div {{ attrs({
+                class: 'sy-ta-col-manager-item',
+                'data-sortable-item': reorderable ? 'column::' ~ item.name : null,
+            }) }}>
+                <label class="sy-ta-col-manager-label">
+                    {% if toggleable %}
+                        <input {{ attrs({
+                            type: 'checkbox',
+                            class: 'sy-checkbox sy-ta-col-manager-checkbox',
+                            id: hostId ? hostId ~ '.table.column-manager.' ~ item.name : null,
+                            value: item.name,
+                            checked: item.isToggled,
+                            disabled: not item.isToggleable,
+                        }, stimulus_target(controller, 'checkbox'), stimulus_action(controller, 'toggle', 'change')) }}>
+                    {% endif %}
+
+                    <span class="sy-ta-col-manager-item-label">{{ item.label }}</span>
+                </label>
+
+                {% if reorderable %}
+                    <twig:SylamentSupport:IconButton
+                        class="sy-ta-col-manager-reorder-handle"
+                        icon="heroicons:bars-2"
+                        :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::REORDER_HANDLE')"
+                        color="gray"
+                        size="sm"
+                        :label="'Reorder ' ~ item.name"
+                        :data-sortable-handle="true"
+                    />
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+</div>

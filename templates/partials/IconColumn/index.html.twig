@@ -1,0 +1,51 @@
+{% set items = component.getStateItems %}
+{% set placeholder = component.getPlaceholder %}
+{% set emptyTooltip = component.getEmptyTooltip %}
+{% set shouldOpenUrlInNewTab = component.shouldOpenUrlInNewTab %}
+{% set rootClasses = [
+    'sy',
+    'sy-ta-icon',
+    component.getAlignmentClass,
+    component.isInline ? 'sy-inline' : null,
+] %}
+
+{% if items is empty %}
+    <div {{ attrs({
+        class: rootClasses,
+        title: (emptyTooltip is markup ? emptyTooltip|striptags : emptyTooltip) ?: null,
+    }, component.getExtraAttributes) }}>
+        {%- if placeholder is not empty -%}
+            <p class="sy-ta-placeholder">{{ placeholder }}</p>
+        {%- endif -%}
+    </div>
+{% else %}
+    <div {{ attrs({
+        class: [
+            ...rootClasses,
+            component.isListWithLineBreaks ? 'sy-ta-icon-has-line-breaks' : null,
+            component.canWrap ? 'sy-wrapped' : null,
+        ],
+    }, component.getExtraAttributes) }}>
+        {%- for item in items|filter(item => item.icon is not null) -%}
+            {%- set itemTooltip = item.tooltip -%}
+            {%- set itemColorAttrs = colorAttributes('Sylament\\Tables\\Colors\\Components\\IconColumnComponent\\IconComponent', item.color) -%}
+            {%- set icon -%}
+                {{- generateIconHtml(item.icon, attributes: {
+                    'aria-hidden': 'true',
+                    title: (itemTooltip is markup ? itemTooltip|striptags : itemTooltip) ?: null,
+                    class: itemColorAttrs.class,
+                    style: itemColorAttrs.style,
+                }, size: item.size ?? 'lg') -}}
+                {%- if item.alternative is not null -%}
+                    <span class="sy-ta-sr-only">{{ item.alternative }}</span>
+                {%- endif -%}
+            {%- endset -%}
+
+            {%- if item.url -%}
+                <a {{ attrs({href: item.url, target: shouldOpenUrlInNewTab ? '_blank' : null}) }}>{{ icon }}</a>
+            {%- else -%}
+                {{- icon -}}
+            {%- endif -%}
+        {%- endfor -%}
+    </div>
+{% endif %}

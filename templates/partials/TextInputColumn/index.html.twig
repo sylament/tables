@@ -1,0 +1,55 @@
+{% set state = component.getClientState %}
+{% set error = component.getUpdateStateError %}
+{% set isDisabled = component.isDisabled %}
+{% set tooltip = component.getTooltip(component.getState) %}
+{% set label = component.getLabel %}
+{% set ariaLabel = (label is markup ? label|striptags : label)|trim ?: null %}
+
+{% set hasInlinePrefix = component.isPrefixInline and (component.getPrefixIcon or component.getPrefixLabel is filled) %}
+{% set hasInlineSuffix = component.isSuffixInline and (component.getSuffixIcon or component.getSuffixLabel is filled) %}
+
+<div {{ attrs({
+    class: [
+        'sy',
+        'sy-ta-text-input',
+        component.getAlignmentClass,
+        component.isInline ? 'sy-inline' : null,
+    ],
+    title: (tooltip is markup ? tooltip|striptags : tooltip) ?: null,
+}, component.getExtraAttributes, stimulus_controller('sylament--tables--editable-cell', {
+    column: component.getName,
+    record: component.getRecordKey ?? '',
+    state: state,
+})) }}>
+    <twig:SylamentSupport:InputWrapper
+        :disabled="isDisabled"
+        :valid="error is null"
+        :inlinePrefix="component.isPrefixInline"
+        :inlineSuffix="component.isSuffixInline"
+        :prefix="component.getPrefixLabel"
+        :prefixIcon="component.getPrefixIcon"
+        :prefixIconColor="component.getPrefixIconColor ?? 'gray'"
+        :suffix="component.getSuffixLabel"
+        :suffixIcon="component.getSuffixIcon"
+        :suffixIconColor="component.getSuffixIconColor ?? 'gray'"
+    >
+        <input {{ attrs({
+            class: ['sy-fo-input', {
+                'sy-fo-input-has-inline-prefix': hasInlinePrefix,
+                'sy-fo-input-has-inline-suffix': hasInlineSuffix,
+            }],
+            type: component.getType,
+            value: state,
+            inputmode: component.getInputMode ?: false,
+            placeholder: component.getPlaceholder ?: false,
+            step: component.getStep,
+            'aria-label': ariaLabel,
+            'aria-invalid': error is not null ? true : null,
+            disabled: isDisabled,
+        }, component.getExtraInputAttributes, stimulus_action('sylament--tables--editable-cell', 'commit', 'change')) }}>
+    </twig:SylamentSupport:InputWrapper>
+
+    {% if error is not null %}
+        <p class="sy-ta-cell-error">{{ error.message }}</p>
+    {% endif %}
+</div>

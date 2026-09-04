@@ -8,6 +8,7 @@ use Doctrine\ORM\QueryBuilder;
 use LogicException;
 use Stringable;
 use Sylament\Support\Pagination\Paginator;
+use Sylament\Tables\Grouping\Group;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
 
@@ -38,6 +39,15 @@ trait HasBulkActions
      * @var list<object|array<string, mixed>>|list<string>|null
      */
     private ?array $cachedSelectedTableRecords = null;
+
+    /**
+     * Enumerated group keys by group, the blank group under `"\0"` since null is
+     * not an array key. One page renders each group header once, but the memo is
+     * what keeps a second reader of the same list free.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $cachedGroupedSelectableTableRecordKeys = [];
 
     public function isTableRecordSelected(string $key): bool
     {
@@ -223,6 +233,28 @@ trait HasBulkActions
     }
 
     /**
+     * Every selectable key inside one record group — the whole group across the
+     * filtered set, or the group's slice of the current page where selection is
+     * page-only. `$group` is the group's **string key**, never its title, and it
+     * is nullable because a record whose group column is blank forms its own
+     * group. No limit and no chunking, as the ungrouped enumeration has none, so
+     * a page of N groups on the whole-universe arm costs N queries.
+     *
+     * @return list<string>
+     */
+    public function getGroupedSelectableTableRecordKeys(?string $group): array
+    {
+        $grouping = $this->getTableGrouping();
+
+        if (!$grouping instanceof Group) {
+            return [];
+        }
+
+        return $this->cachedGroupedSelectableTableRecordKeys[$group ?? "\0"]
+            ??= $this->resolveGroupedSelectableTableRecordKeys($grouping, $group);
+    }
+
+    /**
      * The cross-page arm of "select all": it answers by writing the enumerated
      * keys into the prop and re-rendering, never by returning them.
      */
@@ -233,6 +265,7 @@ trait HasBulkActions
         $this->deselectedTableRecords = [];
         $this->selectedTableRecordKeys = $this->getAllSelectableTableRecordKeys();
         $this->cachedSelectedTableRecords = null;
+        $this->cachedGroupedSelectableTableRecordKeys = [];
     }
 
     /**
@@ -244,6 +277,7 @@ trait HasBulkActions
         $this->deselectedTableRecords = [];
         $this->isTrackingDeselectedTableRecords = false;
         $this->cachedSelectedTableRecords = null;
+        $this->cachedGroupedSelectableTableRecordKeys = [];
     }
 
     /**
@@ -286,6 +320,54 @@ trait HasBulkActions
             static fn (mixed $key): string => (string) $key,
             array_filter($keys, static fn (mixed $key): bool => is_scalar($key) && !is_bool($key)),
         ));
+    }
+
+    /**
+     * Both lanes key through `Group::getStringKey()` — the same reader the group
+     * header rendered its key with, so the checkbox and the heading above it
+     * cannot disagree. Filament's records lane reads the group column raw
+     * instead, which loses `date()`, `getKeyFromRecordUsing()` and every enum.
+     *
+     * @return list<string>
+     */
+    private function resolveGroupedSelectableTableRecordKeys(Group $grouping, ?string $group): array
+    {
+        $table = $this->getTable();
+
+        if ($table->selectsCurrentPageOnly()) {
+            $keys = [];
+
+            foreach ($table->getRecords() as $key => $record) {
+                if ($grouping->getStringKey($record) !== $group || !$table->isRecordSelectable($record)) {
+                    continue;
+                }
+
+                $keys[] = (string) $key;
+            }
+
+            return $keys;
+        }
+
+        $query = $grouping->scopeQueryByKey($this->getFilteredTableQueryOrFail(), $group);
+
+        if (!$table->checksIfRecordIsSelectable()) {
+            return $this->pluckTableRecordKeys($query);
+        }
+
+        $keys = [];
+
+        /** @var list<object> $records */
+        $records = $query->getQuery()->getResult();
+
+        foreach ($records as $record) {
+            if (!$table->isRecordSelectable($record)) {
+                continue;
+            }
+
+            $keys[] = $this->getTableRecordKey($record);
+        }
+
+        return $keys;
     }
 
     /**

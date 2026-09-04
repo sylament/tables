@@ -1,0 +1,62 @@
+{% set items = component.getStateItems %}
+{% set placeholder = component.getPlaceholder %}
+{% set emptyTooltip = component.getEmptyTooltip %}
+{% set shouldOpenUrlInNewTab = component.shouldOpenUrlInNewTab %}
+{% set clipboardController = 'sylament--support--clipboard' %}
+{% set rootClasses = [
+    'sy',
+    'sy-ta-color',
+    component.getAlignmentClass,
+    component.isInline ? 'sy-inline' : null,
+] %}
+
+{% if items is empty %}
+    <div {{ attrs({
+        class: rootClasses,
+        title: (emptyTooltip is markup ? emptyTooltip|striptags : emptyTooltip) ?: null,
+    }, component.getExtraAttributes) }}>
+        {%- if placeholder is not empty -%}
+            <p class="sy-ta-placeholder">{{ placeholder }}</p>
+        {%- endif -%}
+    </div>
+{% else %}
+    <div {{ attrs({
+        class: [
+            ...rootClasses,
+            component.canWrap ? 'sy-wrapped' : null,
+        ],
+    }, component.getExtraAttributes) }}>
+        {%- for item in items -%}
+            {%- set itemTooltip = item.tooltip -%}
+            {%- set itemCopyAttributes = item.copyable ? stimulus_controller(clipboardController, {
+                text: item.copyableState,
+                message: item.copyMessage,
+                duration: item.copyMessageDuration,
+            })
+                |stimulus_action(clipboardController, 'copy', 'click')
+                |stimulus_action(clipboardController, 'copy', 'keydown.enter')
+                |stimulus_action(clipboardController, 'copy', 'keydown.space') : null -%}
+
+            {%- set swatch -%}
+                <span {{ attrs({
+                    class: [
+                        'sy-ta-color-item',
+                        item.copyable ? 'sy-copyable' : null,
+                    ],
+                    role: item.copyable ? 'button' : (item.color is not null ? 'img' : null),
+                    'aria-label': item.copyable
+                        ? (item.color is not null ? 'Copy ' ~ item.color : 'Copy colour')
+                        : item.color,
+                    title: (itemTooltip is markup ? itemTooltip|striptags : itemTooltip) ?: null,
+                    style: item.color is not null ? 'background-color: ' ~ item.color : null,
+                }, itemCopyAttributes) }}></span>
+            {%- endset -%}
+
+            {%- if item.url -%}
+                <a {{ attrs({href: item.url, target: shouldOpenUrlInNewTab ? '_blank' : null}) }}>{{ swatch }}</a>
+            {%- else -%}
+                {{- swatch -}}
+            {%- endif -%}
+        {%- endfor -%}
+    </div>
+{% endif %}

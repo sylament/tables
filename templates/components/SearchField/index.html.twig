@@ -1,0 +1,32 @@
+{% props
+    id = null,
+
+    label = 'Search',
+    placeholder = 'Search',
+
+    model = 'tableSearch',
+    value = null,
+
+    onBlur = false,
+    debounceMs = 500
+%}
+
+{% set dataModel = onBlur ? 'on(change)|' ~ model : 'debounce(' ~ debounceMs ~ ')|' ~ model %}
+
+<label {{ attributes.defaults({class: classes('sy sy-ta-search-field')}) }}>
+    <twig:SylamentSupport:Icon
+        icon="heroicons:magnifying-glass-20-solid"
+        :alias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::SEARCH_FIELD')"
+    />
+    <input {{ attrs({
+        id: id,
+        type: 'search',
+        class: 'sy-ta-search-input',
+        autocomplete: 'off',
+        maxlength: 1000,
+        placeholder: placeholder,
+        'aria-label': label,
+        value: value,
+        'data-model': dataModel,
+    }) }}>
+</label>

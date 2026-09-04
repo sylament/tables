@@ -129,3 +129,53 @@ it('rebuilds the URL with the mapped names after a live round trip', function ()
         ->and($rebuilt)->toContain('filters%5Bplays%5D%5Bvalue%5D=100')
         ->and($rebuilt)->not->toContain('tableSort');
 });
+
+it('seeds a per-column term into the only host that maps it', function (): void {
+    [, $crawler] = browseTo('?columnSearches[title]=Air');
+
+    expect(publishedProps($crawler, '#column-search-table')['tableColumnSearches'])->toBe(['title' => 'Air'])
+        ->and(publishedProps($crawler, '#bound-table')['tableColumnSearches'])->toBe([])
+        ->and(renderedRowsOf($crawler, 'ColumnSearchUrlTable'))->toContain('Airbag')
+        ->and(renderedRowsOf($crawler, 'ColumnSearchUrlTable'))->not->toContain('Let Down');
+});
+
+it('seeds a grouping into the only host that maps it', function (): void {
+    [, $crawler] = browseTo('?grouping=plays');
+
+    expect(publishedProps($crawler, '#bound-table')['tableGrouping'])->toBe('plays')
+        ->and(publishedProps($crawler, '#unbound-table')['tableGrouping'])->toBeNull()
+        // The seeded value reaches the rendered rows, not just the published
+        // props: the bound host opens a group heading its unbound twin has not.
+        ->and(renderedRowsOf($crawler, 'UrlBoundSongsTable'))->toContain('Plays: 100')
+        ->and(renderedRowsOf($crawler, 'UnboundSongsTable'))->not->toContain('Plays: 100');
+});
+
+it('drops a seeded grouping naming a group the table does not offer', function (): void {
+    [, $crawler] = browseTo('?grouping=isFeatured');
+
+    // Cleared at mount rather than only at read time, so the raw client string
+    // never reaches the ordering it would otherwise be re-checked against on
+    // every read.
+    expect(publishedProps($crawler, '#bound-table')['tableGrouping'])->toBeNull();
+});
+
+it('rebuilds the URL with the grouping after a live round trip', function (): void {
+    [$client, $crawler] = browseTo('?grouping=plays');
+
+    $root = $crawler->filter('#bound-table [data-live-props-value]');
+
+    $client->request(
+        'POST',
+        $root->attr('data-live-url-value') ?? '',
+        parameters: ['data' => json_encode(['props' => json_decode($root->attr('data-live-props-value') ?? '', true, flags: JSON_THROW_ON_ERROR)], flags: JSON_THROW_ON_ERROR)],
+        server: [
+            // Deliberately without the parameter the props carry, so the
+            // rebuilt URL can only have gained it from the bound prop rather
+            // than by echoing what was sent.
+            'HTTP_X_LIVE_URL' => '/fixtures/browsing-state',
+            'HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest',
+        ],
+    );
+
+    expect($client->getResponse()->headers->get('X-Live-Url') ?? '')->toContain('grouping=plays');
+});

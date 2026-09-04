@@ -1,0 +1,16 @@
+.sy-ta-checkbox {
+    @apply w-full;
+
+    &:not(.sy-inline) {
+        @apply px-3 py-4;
+    }
+
+    &.sy-align-center {
+        @apply text-center;
+    }
+
+    &.sy-align-end,
+    &.sy-align-right {
+        @apply text-end;
+    }
+}

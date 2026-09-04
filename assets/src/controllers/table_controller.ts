@@ -10,12 +10,20 @@ const LOADED_MODEL = "isTableLoaded";
 const SELECT_ALL_ACTION = "selectAllTableRecords";
 const REORDER_ACTION = "reorderTable";
 const LOAD_ACTION = "loadTable";
+const GROUP_ACTION = "groupTable";
 
 const RECORD_CHECKBOX_SELECTOR = ".sy-ta-record-checkbox";
 const ROW_SELECTOR = ".sy-ta-row";
 const SELECTED_ROW_CLASS = "sy-selected";
 const BULK_ONLY_SELECTOR = "[data-sy-table-bulk-only]";
 const COUNT_PLACEHOLDER = ":count";
+
+const ROW_GROUP_ATTRIBUTE = "data-sy-group";
+const GROUP_KEYS_ATTRIBUTE = "data-sy-group-keys";
+const COLLAPSED_CLASS = "sy-collapsed";
+const GROUP_HEADER_SELECTOR = ".sy-ta-group-header";
+const COLLAPSIBLE_GROUP_HEADER_SELECTOR = ".sy-ta-group-header.sy-collapsible";
+const GROUPING_FIELDS_SELECTOR = ".sy-ta-grouping-settings-fields";
 
 /** The client working copy of the host's three selection props (Filament's two `Set`s + flag). */
 type SelectionState = {
@@ -24,7 +32,12 @@ type SelectionState = {
   tracking: boolean;
 };
 
-/** Record selection over the live host's ValueStore, the port of Filament's `filamentTable` data. */
+/**
+ * Record selection and record grouping over the live host's ValueStore, the port of Filament's
+ * `filamentTable` data. Both halves are client-owned in the same way: a selection tick and a
+ * group tick write the three selection props with no request, while the collapse state never
+ * reaches the server at all and lives exactly as long as this controller instance.
+ */
 export default class extends Controller<HTMLElement> {
   static targets = [
     "recordCheckbox",
@@ -33,6 +46,10 @@ export default class extends Controller<HTMLElement> {
     "count",
     "selectAll",
     "deselectAll",
+    "groupColumn",
+    "groupDirection",
+    "groupDirectionField",
+    "groupCheckbox",
   ];
 
   static values = {
@@ -41,6 +58,7 @@ export default class extends Controller<HTMLElement> {
     allSelectableCount: Number,
     deferred: { type: Boolean, default: false },
     pollInterval: Number,
+    groupsCollapsedByDefault: { type: Boolean, default: false },
     countOne: String,
     countMany: String,
   };
@@ -54,6 +72,10 @@ export default class extends Controller<HTMLElement> {
   declare readonly countTarget: HTMLElement;
   declare readonly hasSelectAllTarget: boolean;
   declare readonly selectAllTarget: HTMLElement;
+  declare readonly groupColumnTargets: HTMLSelectElement[];
+  declare readonly groupDirectionTargets: HTMLSelectElement[];
+  declare readonly groupDirectionFieldTargets: HTMLElement[];
+  declare readonly groupCheckboxTargets: HTMLInputElement[];
 
   declare readonly canTrackValue: boolean;
   declare readonly pageOnlyValue: boolean;
@@ -62,6 +84,7 @@ export default class extends Controller<HTMLElement> {
   declare readonly deferredValue: boolean;
   declare readonly hasPollIntervalValue: boolean;
   declare readonly pollIntervalValue: number;
+  declare readonly groupsCollapsedByDefaultValue: boolean;
   declare readonly countOneValue: string;
   declare readonly countManyValue: string;
 
@@ -71,6 +94,9 @@ export default class extends Controller<HTMLElement> {
   #lastChecked: HTMLInputElement | null = null;
   #pollTimer: ReturnType<typeof setInterval> | null = null;
   #generation = 0;
+
+  /** The group titles whose collapse is *flipped* from the default — Filament's `groupVisibility`. */
+  #toggledGroups = new Set<string>();
 
   async connect(): Promise<void> {
     const generation = ++this.#generation;
@@ -189,6 +215,106 @@ export default class extends Controller<HTMLElement> {
   }
 
   /**
+   * The two selects compose the one scalar the host validates, over an action rather than a
+   * writable prop: the value is untrusted and `groupTable()` is where it is checked. The fields
+   * render twice — a dropdown copy and an inline one — so the changed select is the authority
+   * and both copies are re-synced from it. Changing the column empties the collapse set, whose
+   * titles belong to a grouping that no longer exists (Filament's `resetCollapsedGroups()`).
+   */
+  group(event: Event): void {
+    const component = this.#component;
+    const changed = event.target;
+
+    if (component === null || !(changed instanceof HTMLSelectElement)) {
+      return;
+    }
+
+    const scope = changed.closest<HTMLElement>(GROUPING_FIELDS_SELECTOR) ?? this.element;
+    const column = this.groupColumnTargets.find((select) => scope.contains(select))?.value ?? "";
+    const direction =
+      column !== "" &&
+      this.groupDirectionTargets.find((select) => scope.contains(select))?.value === "desc"
+        ? "desc"
+        : "asc";
+
+    if (this.groupColumnTargets.includes(changed)) {
+      this.#toggledGroups.clear();
+    }
+
+    for (const select of this.groupColumnTargets) {
+      select.value = column;
+    }
+
+    for (const select of this.groupDirectionTargets) {
+      select.value = direction;
+    }
+
+    for (const field of this.groupDirectionFieldTargets) {
+      field.hidden = column === "";
+    }
+
+    void component.action(GROUP_ACTION, { group: column, direction });
+  }
+
+  /**
+   * Filament's `toggleCollapseGroup()`, keyed by the title the row carries. The collapse control
+   * inside the header binds this same action, so the click is stopped before the header's own
+   * handler sees it and the group toggles once — Stimulus' `:stop` option needs 3.2+ and the
+   * peer range allows 3.0.
+   */
+  toggleGroup(event: Event): void {
+    event.stopPropagation();
+
+    const row =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>(`tr[${ROW_GROUP_ATTRIBUTE}]`)
+        : null;
+    const title = row?.getAttribute(ROW_GROUP_ATTRIBUTE);
+
+    if (title === null || title === undefined) {
+      return;
+    }
+
+    if (this.#toggledGroups.has(title)) {
+      this.#toggledGroups.delete(title);
+    } else {
+      this.#toggledGroups.add(title);
+    }
+
+    this.#repaint();
+  }
+
+  /**
+   * Filament's `toggleSelectRecords()` over one group's keys: a fully selected group is cleared
+   * and any other is completed, never inverted per key. The keys are server-written onto the
+   * checkbox, so the tick costs no request.
+   */
+  toggleGroupRecords(event: Event): void {
+    const checkbox = event.target;
+
+    if (!(checkbox instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const keys = toKeys(safeParse(checkbox.getAttribute(GROUP_KEYS_ATTRIBUTE)));
+
+    if (keys.length === 0) {
+      return;
+    }
+
+    const state = this.#state();
+
+    if (this.#areSelected(state, keys)) {
+      this.#deselectRecords(state, keys);
+    } else {
+      this.#selectRecords(state, keys);
+    }
+
+    this.#push(state);
+    this.#repaint();
+  }
+
+  /**
    * The drag control's new order, handed to the host's write action. The control never talks to
    * a live component, so this is the whole bridge; the host re-resolves every key it is sent.
    */
@@ -300,6 +426,14 @@ export default class extends Controller<HTMLElement> {
     return keys.every((key) => this.#isSelected(state, key));
   }
 
+  /**
+   * Filament's `isGroupCollapsed()` with its default folded in: the set lists the collapsed
+   * groups when the table expands by default, and the expanded ones when it collapses by default.
+   */
+  #isGroupCollapsed(title: string): boolean {
+    return this.#toggledGroups.has(title) !== this.groupsCollapsedByDefaultValue;
+  }
+
   #pageKeys(): string[] {
     return this.recordCheckboxTargets.map((checkbox) => checkbox.value);
   }
@@ -373,6 +507,31 @@ export default class extends Controller<HTMLElement> {
     for (const element of this.element.querySelectorAll<HTMLElement>(BULK_ONLY_SELECTOR)) {
       element.hidden = count === 0;
     }
+
+    // Only a collapsible grouping is painted: without a control to expand a group again, a table
+    // that collapses by default would hide every row of it for good.
+    if (this.element.querySelector(COLLAPSIBLE_GROUP_HEADER_SELECTOR) !== null) {
+      for (const row of this.element.querySelectorAll<HTMLElement>(`tr[${ROW_GROUP_ATTRIBUTE}]`)) {
+        const collapsed = this.#isGroupCollapsed(row.getAttribute(ROW_GROUP_ATTRIBUTE) ?? "");
+        const header = row.querySelector<HTMLElement>(GROUP_HEADER_SELECTOR);
+
+        // A header row carries the class on its inner element alone: on the row it would hide the
+        // one control that can expand the group again.
+        row.classList.toggle(COLLAPSED_CLASS, collapsed && header === null);
+        header?.classList.toggle(COLLAPSED_CLASS, collapsed);
+        header
+          ?.querySelector("button")
+          ?.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      }
+    }
+
+    for (const checkbox of this.groupCheckboxTargets) {
+      const keys = toKeys(safeParse(checkbox.getAttribute(GROUP_KEYS_ATTRIBUTE)));
+      const selectedInGroup = keys.filter((key) => this.#isSelected(state, key)).length;
+
+      checkbox.checked = keys.length > 0 && selectedInGroup === keys.length;
+      checkbox.indeterminate = selectedInGroup > 0 && selectedInGroup < keys.length;
+    }
   }
 
   #watchShiftClicks(): void {
@@ -431,4 +590,17 @@ export default class extends Controller<HTMLElement> {
 /** The store's models are client-writable, so anything but a list of strings reads as empty. */
 function toKeys(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((key): key is string => typeof key === "string") : [];
+}
+
+/** The attribute is server-written, but a morph can leave anything there: a bad parse is no keys. */
+function safeParse(value: string | null): unknown {
+  if (value === null) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 }

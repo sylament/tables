@@ -1,15 +1,17 @@
 .sy-ta-text {
-    @apply w-full px-3 py-4;
+    @apply w-full;
 
-    &.sy-ta-text-has-descriptions {
+    &:not(.sy-inline) {
+        @apply px-3 py-4;
+    }
+
+    /* Descriptions and the list-limit message stack under the content. */
+    &.sy-ta-text-has-descriptions,
+    &.sy-ta-text-list-limited {
         @apply flex flex-col;
 
         &.sy-ta-text-has-badges {
-            @apply flex-row flex-wrap gap-x-1.5 gap-y-2;
-
-            & > .sy-ta-text-description {
-                @apply w-full;
-            }
+            @apply gap-y-2;
         }
 
         &:not(.sy-ta-text-has-badges) {
@@ -17,38 +19,63 @@
         }
     }
 
-    &.sy-ta-text-has-badges:not(.sy-ta-text-has-descriptions) {
-        @apply flex gap-x-1.5;
-
-        &.sy-wrapped {
-            @apply flex-wrap gap-y-1;
-        }
+    /* Inside, so a wrapped bullet line indents under its own text rather than the marker. */
+    &.sy-bulleted > ul {
+        @apply list-inside list-disc;
     }
 
-    &.sy-wrapped {
+    &.sy-ta-text-has-badges > ul {
+        @apply flex gap-x-1.5;
+    }
+
+    &.sy-ta-text-has-badges.sy-wrapped > ul {
+        @apply flex-wrap gap-y-1;
+    }
+
+    &.sy-ta-text-has-badges.sy-ta-text-has-line-breaks > ul {
+        @apply flex-col gap-y-1;
+    }
+
+    /* Badges that already break onto their own lines need no soft wrapping, and turning it on
+       pushes a badge below its own bullet. */
+    &.sy-wrapped:not(.sy-ta-text-has-badges.sy-ta-text-has-line-breaks) {
         @apply whitespace-normal;
 
-        /* Badge content should not wrap, but descriptions above and below badges should. */
-        & .sy-badge {
+        /* Badge content and the list-limit message should not wrap; descriptions should. */
+        & .sy-badge,
+        & .sy-ta-text-list-limited-message {
             @apply whitespace-nowrap;
         }
     }
 
     &.sy-align-center {
         @apply text-center;
+
+        & > ul {
+            @apply justify-center;
+        }
     }
 
     &.sy-align-end,
     &.sy-align-right {
         @apply text-end;
+
+        & > ul {
+            @apply justify-end;
+        }
     }
 
     &.sy-align-justify,
     &.sy-align-between {
         @apply text-justify;
+
+        & > ul {
+            @apply justify-between;
+        }
     }
 
-    & > .sy-ta-text-description {
+    & > .sy-ta-text-description,
+    & > .sy-ta-text-list-limited-message {
         @apply text-sm text-gray-500 dark:text-gray-400;
     }
 }
@@ -56,14 +83,42 @@
 .sy-ta-text-item {
     @apply text-gray-950 dark:text-white;
 
-    @apply line-clamp-(--sy-line-clamp,none);
+    /* A line clamp sets `display: -webkit-box`, which drops a list item's bullet — so a bulleted
+       item keeps `display: list-item` and goes unclamped. */
+    &:not(.sy-bulleted li.sy-ta-text-item) {
+        @apply line-clamp-(--sy-line-clamp,none);
+    }
+
+    & a {
+        @apply hover:underline focus-visible:underline;
+    }
 
     &.sy-color {
         @apply text-(--sy-text) dark:text-(--sy-dark-text);
+
+        li&::marker {
+            @apply text-gray-950;
+        }
+
+        @variant dark {
+            li&::marker {
+                @apply text-white;
+            }
+        }
     }
 
     &.sy-color-gray {
         @apply text-gray-500 dark:text-gray-400;
+
+        li&::marker {
+            @apply text-gray-950;
+        }
+
+        @variant dark {
+            li&::marker {
+                @apply text-white;
+            }
+        }
     }
 
     &.sy-size-xs {

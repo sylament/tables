@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Sylament\Tables\Tests\Integration\Concerns;
 
+use Sylament\Tables\Columns\TextColumn;
+use Sylament\Tables\Grouping\Group;
+use Sylament\Tables\Table;
+use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
+use Sylament\Tables\Tests\Fixtures\Records\Song;
+use Sylament\Tables\Tests\Fixtures\Records\Status;
 use Symfony\UX\LiveComponent\Test\InteractsWithLiveComponents;
 
 uses(InteractsWithLiveComponents::class);
@@ -169,4 +175,52 @@ it('dehydrates the selection as the raw key list its checkboxes speak', function
         ->and($props['deselectedTableRecords'])->toBe([])
         ->and($props['isTrackingDeselectedTableRecords'])->toBeFalse()
         ->and($props)->not->toHaveKey('selectedTableRecordKeys');
+});
+
+/*
+ * The records lane of the grouped enumeration. Filament reads the group column
+ * raw here — `$record[$groupColumn]`, keyed `array $record` — so a backed enum
+ * is a TypeError, an object row is a TypeError, and `date()` and
+ * `getKeyFromRecordUsing()` are both lost; the port keys this lane through
+ * `Group::getStringKey()` exactly as it keys the query one.
+ */
+
+it('keys a records-lane group through getStringKey, enums and closures included', function (): void {
+    $configure = fn (Table $table): Table => $table
+        ->records(fn (): array => [
+            new Song('Airbag', 'OK Computer', id: 1, status: Status::Published),
+            new Song('Exit Music', 'OK Computer', id: 2, status: Status::Draft),
+            new Song('Let Down', 'OK Computer', id: 3, status: Status::Published),
+            new Song('No Surprises', 'OK Computer', id: 4),
+        ])
+        ->columns([TextColumn::make('title')])
+        ->groups(['status', Group::make('initial')->getKeyFromRecordUsing(
+            fn (Song $record): string => mb_substr($record->title, 0, 1),
+        )]);
+
+    $enumKeyed = new TableHost($configure);
+    $enumKeyed->tableGrouping = 'status';
+
+    $closureKeyed = new TableHost($configure);
+    $closureKeyed->tableGrouping = 'initial';
+
+    expect($enumKeyed->getGroupedSelectableTableRecordKeys('published'))->toBe(['1', '3'])
+        ->and($enumKeyed->getGroupedSelectableTableRecordKeys('draft'))->toBe(['2'])
+        ->and($enumKeyed->getGroupedSelectableTableRecordKeys(null))->toBe(['4'])
+        ->and($closureKeyed->getGroupedSelectableTableRecordKeys('A'))->toBe(['1']);
+});
+
+it('re-applies the selectability callback to a records-lane group', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table
+        ->records(fn (): array => [
+            new Song('Airbag', 'OK Computer', id: 1, status: Status::Published),
+            new Song('Let Down', 'OK Computer', id: 3, status: Status::Published),
+        ])
+        ->columns([TextColumn::make('title')])
+        ->groups(['status'])
+        ->checkIfRecordIsSelectableUsing(fn (Song $record): bool => $record->id !== 3));
+
+    $host->tableGrouping = 'status';
+
+    expect($host->getGroupedSelectableTableRecordKeys('published'))->toBe(['1']);
 });

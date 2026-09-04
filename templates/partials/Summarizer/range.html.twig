@@ -1,0 +1,16 @@
+{% set label = component.getLabel %}
+
+{% set from = state[0] ?? null %}
+{% set to = state[1] ?? null %}
+
+<div {{ attrs({class: 'sy sy-ta-range-summary'}, component.getExtraAttributes) }}>
+    {%- if label is filled -%}
+        <span {{ attrs({
+            class: classes('sy-ta-range-summary-label', {'sy-sr-only': component.isLabelHidden}),
+        }) }}>{{ label }}</span>
+    {%- endif -%}
+
+    {%- if from is filled or to is filled -%}
+        <span>{{ from }}{% if from is filled and to is filled %} - {% endif %}{{ to }}</span>
+    {%- endif -%}
+</div>

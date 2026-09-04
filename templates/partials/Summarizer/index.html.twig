@@ -1,0 +1,11 @@
+{% set label = component.getLabel %}
+
+<div {{ attrs({class: 'sy sy-ta-text-summary'}, component.getExtraAttributes) }}>
+    {%- if label is filled -%}
+        <span {{ attrs({
+            class: classes('sy-ta-text-summary-label', {'sy-sr-only': component.isLabelHidden}),
+        }) }}>{{ label }}</span>
+    {%- endif -%}
+
+    <span>{{ state }}</span>
+</div>

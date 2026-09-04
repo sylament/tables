@@ -1,0 +1,58 @@
+{% set state = component.getClientState %}
+{% set error = component.getUpdateStateError %}
+{% set options = component.getOptions %}
+{% set isDisabled = component.isDisabled %}
+{% set tooltip = component.getTooltip(component.getState) %}
+{% set label = component.getLabel %}
+{% set ariaLabel = (label is markup ? label|striptags : label)|trim ?: null %}
+
+<div {{ attrs({
+    class: [
+        'sy',
+        'sy-ta-select',
+        component.getAlignmentClass,
+        component.isInline ? 'sy-inline' : null,
+    ],
+    title: (tooltip is markup ? tooltip|striptags : tooltip) ?: null,
+}, component.getExtraAttributes, stimulus_controller('sylament--tables--editable-cell', {
+    column: component.getName,
+    record: component.getRecordKey ?? '',
+    state: state,
+})) }}>
+    <twig:SylamentSupport:InputWrapper :disabled="isDisabled" :valid="error is null">
+        <select {{ attrs({
+            class: 'sy-fo-select',
+            'aria-label': ariaLabel,
+            'aria-invalid': error is not null ? true : null,
+            disabled: isDisabled,
+        }, component.getExtraInputAttributes, stimulus_action('sylament--tables--editable-cell', 'commit', 'change')) }}>
+            {% if component.canSelectPlaceholder %}
+                <option {{ attrs({value: '', selected: state == ''}) }}>{{ isDisabled ? '' : component.getPlaceholder }}</option>
+            {% endif %}
+
+            {% for value, groupOrLabel in options %}
+                {% if groupOrLabel is iterable %}
+                    <optgroup label="{{ value }}">
+                        {% for groupedValue, groupedLabel in groupOrLabel %}
+                            <option {{ attrs({
+                                value: groupedValue,
+                                selected: groupedValue == state,
+                                disabled: component.isOptionDisabled(groupedValue, groupedLabel),
+                            }) }}>{{ groupedLabel }}</option>
+                        {% endfor %}
+                    </optgroup>
+                {% else %}
+                    <option {{ attrs({
+                        value: value,
+                        selected: value == state,
+                        disabled: component.isOptionDisabled(value, groupOrLabel),
+                    }) }}>{{ groupOrLabel }}</option>
+                {% endif %}
+            {% endfor %}
+        </select>
+    </twig:SylamentSupport:InputWrapper>
+
+    {% if error is not null %}
+        <p class="sy-ta-cell-error">{{ error.message }}</p>
+    {% endif %}
+</div>

@@ -8,6 +8,7 @@ use Closure;
 use Sylament\Actions\Action;
 use Sylament\Actions\BulkAction;
 use Sylament\Support\Icons\IconManager;
+use Sylament\Tables\Columns\Summarizers\Count;
 use Sylament\Tables\Columns\TextColumn;
 use Sylament\Tables\Table;
 use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
@@ -170,4 +171,39 @@ it('vetoes every cell link and unclickable header while reordering', function ()
         ->and($on->filter('td.sy-ta-cell div.sy-ta-col')->count())->toBe(3)
         ->and($on->filter('th.sy-ta-header-cell button')->count())->toBe(0)
         ->and($on->filter('th.sy-ta-header-cell')->first()->attr('aria-sort'))->toBeNull();
+});
+
+it('suppresses the grouping selector, the group headers and the group checkboxes while reordering', function (): void {
+    // The offered group and the one in force are deliberately different: a
+    // default the selector does not list is the only grouping that resolves on
+    // a host nothing has mounted, and it leaves the selector something to show.
+    $grouped = fn (Table $table): Table => $table
+        ->groups(['album'])
+        ->defaultGroup('title')
+        ->bulkActions([BulkAction::make('archive')]);
+
+    $off = new Crawler(reorderingTableHtml(configure: $grouped));
+    $on = new Crawler(reorderingTableHtml(true, $grouped));
+
+    expect($off->filter('.sy-ta-grouping-settings')->count())->toBe(1)
+        ->and($off->filter('tr.sy-ta-group-header-row')->count())->toBe(3)
+        ->and($off->filter('input.sy-ta-group-checkbox')->count())->toBe(3)
+        ->and($off->filter('tr[data-sy-group]')->count())->toBe(6)
+        ->and($on->filter('.sy-ta-grouping-settings')->count())->toBe(0)
+        ->and($on->filter('tr.sy-ta-group-header-row')->count())->toBe(0)
+        ->and($on->filter('input.sy-ta-group-checkbox')->count())->toBe(0)
+        ->and($on->filter('tr[data-sy-group]')->count())->toBe(0)
+        ->and($on->filter('tr[data-sortable-item]')->count())->toBe(3);
+});
+
+it('suppresses every summary row while reordering', function (): void {
+    $summarized = fn (Table $table): Table => $table->columns([TextColumn::make('title')->summarize(Count::make())]);
+
+    $off = new Crawler(reorderingTableHtml(configure: $summarized));
+    $on = new Crawler(reorderingTableHtml(true, $summarized));
+
+    expect($off->filter('tr.sy-ta-summary-row')->count())->toBe(1)
+        ->and($on->filter('tr.sy-ta-summary-row')->count())->toBe(0)
+        ->and($on->filter('tr.sy-ta-summary-header-row')->count())->toBe(0)
+        ->and($on->filter('tr[data-sortable-item]')->count())->toBe(3);
 });

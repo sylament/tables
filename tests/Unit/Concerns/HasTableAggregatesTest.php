@@ -365,3 +365,20 @@ it('a searched, aggregate-sorted, paginated table stays consistent', function ()
         ->and(aggregateCellStates($secondPage, 'songs_count'))->toBe([0])
         ->and($firstPage->getAllTableRecordsCount())->toBe(3);
 });
+
+it('runs no aggregate query for a toggled-hidden column', function (): void {
+    $recorder = new RecordingMiddleware();
+    $host = artistTableHost(artistsWithSongs($recorder), [TextColumn::make('songs_count')->counts('songs')->toggleable()]);
+    $host->tableColumns = [['type' => 'column', 'name' => 'songs_count', 'isToggled' => false, 'isToggledHiddenByDefault' => false]];
+
+    $recorder->reset();
+
+    $records = $host->getTableRecords();
+    $statements = $recorder->statements();
+
+    expect($records)->toBeInstanceOf(Paginator::class)
+        ->and($statements)->toHaveCount(2)
+        ->and($statements[0])->toContain('LIMIT')
+        ->and($statements[1])->toContain('COUNT(')
+        ->and(array_filter($statements, static fn (string $statement): bool => str_contains($statement, 'GROUP BY')))->toBe([]);
+});

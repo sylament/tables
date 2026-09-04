@@ -19,13 +19,18 @@ class SylamentTablesBundle extends SylamentBundle
         $services = $configurator->services();
 
         $services
-            ->load(__NAMESPACE__ . '\\Columns\\', __DIR__ . '/Columns/*.php')
+            ->load(__NAMESPACE__ . '\\Columns\\', __DIR__ . '/Columns/{*,Summarizers/*}.php')
             ->autowire()
             ->autoconfigure();
 
         $services
             ->load(__NAMESPACE__ . '\\Filters\\', __DIR__ . '/Filters/*.php')
             ->exclude([__DIR__ . '/Filters/FilterIndicator.php'])
+            ->autowire()
+            ->autoconfigure();
+
+        $services
+            ->load(__NAMESPACE__ . '\\Grouping\\', __DIR__ . '/Grouping/*.php')
             ->autowire()
             ->autoconfigure();
 

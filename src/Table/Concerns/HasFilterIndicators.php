@@ -20,8 +20,9 @@ trait HasFilterIndicators
     }
 
     /**
-     * The active-filter chips — the global search chip first, then every visible
-     * filter's own — each paired with the live action that removes it.
+     * The active-filter chips — the global search chip first, then one per
+     * column holding a term of its own, then every visible filter's — each
+     * paired with the live action that removes it.
      *
      * @return list<FilterIndicator>
      */
@@ -37,6 +38,10 @@ trait HasFilterIndicators
 
         if ($searchIndicator instanceof Indicator) {
             $indicators[] = new FilterIndicator($searchIndicator, 'resetTableSearch', []);
+        }
+
+        foreach ($this->getColumnSearchIndicators() as $columnName => $indicator) {
+            $indicators[] = new FilterIndicator($indicator, 'resetTableColumnSearch', ['column' => $columnName]);
         }
 
         foreach ($this->getFilters() as $filterName => $filter) {

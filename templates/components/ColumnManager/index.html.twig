@@ -1,0 +1,61 @@
+{% props
+    hostId = null,
+    headingLevel = 3,
+    resetActionPosition = null,
+
+    items = [],
+    gridColumns = 1,
+    toggleable = false,
+    reorderable = false,
+    reorderAnimationDuration = 300,
+
+    live = false,
+
+    applyVisible = false,
+    applyAction = null
+%}
+
+{% set headingTag = 'h' ~ headingLevel %}
+{% set resetInFooter = resetActionPosition is not null and resetActionPosition.name == 'Footer' %}
+{% set applyRendered = applyVisible and applyAction is not null %}
+{% set footerVisible = applyRendered or resetInFooter %}
+{% set resetAttributes = stimulus_action('live', 'action', parameters: {action: 'resetTableColumnManager'}) %}
+
+<div {{ attributes.defaults({class: classes('sy sy-ta-col-manager')}) }}>
+    <div class="sy-ta-col-manager-header">
+        <{{ headingTag }} class="sy-ta-col-manager-heading">Columns</{{ headingTag }}>
+
+        {% if not resetInFooter %}
+            <div class="sy-ta-col-manager-header-actions">
+                <twig:SylamentSupport:Link
+                    tag="button"
+                    color="danger"
+                    size="sm"
+                    {{ ...resetAttributes }}
+                >Reset</twig:SylamentSupport:Link>
+            </div>
+        {% endif %}
+    </div>
+
+    <twig:SylamentTables:ColumnManagerContent
+        :hostId="hostId"
+        :items="items"
+        :gridColumns="gridColumns"
+        :toggleable="toggleable"
+        :reorderable="reorderable"
+        :reorderAnimationDuration="reorderAnimationDuration"
+        :live="live"
+    />
+
+    {% if footerVisible %}
+        <div class="sy-ta-col-manager-actions-ctn">
+            {% if applyRendered %}
+                {{ renderComponent(applyAction) }}
+            {% endif %}
+
+            {% if resetInFooter %}
+                <twig:SylamentSupport:Button color="danger" size="sm" {{ ...resetAttributes }}>Reset</twig:SylamentSupport:Button>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>

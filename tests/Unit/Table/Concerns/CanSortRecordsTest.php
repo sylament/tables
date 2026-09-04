@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use Doctrine\ORM\QueryBuilder;
 use Sylament\Schemas\State\Relationship;
+use Sylament\Tables\Columns\TextColumn;
 use Sylament\Tables\Table;
+use Sylament\Tables\Tests\Fixtures\Concerns\TableHost;
 use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Artist;
 use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Genre;
 use Sylament\Tables\Tests\Fixtures\Doctrine\Entity\Song;
@@ -61,4 +63,17 @@ it('leaves a table whose query() won over its relationship unordered, with the c
     expect($table->getDefaultSort($query, 'asc'))->toBeNull()
         ->and($query->getDQL())->not->toContain('ORDER BY')
         ->and($calls)->toBe(0);
+});
+
+it('refuses to sort by a hidden column while a toggled-hidden one still sorts', function (): void {
+    $host = new TableHost(fn (Table $table): Table => $table->columns([
+        TextColumn::make('title')->sortable()->hidden(),
+        TextColumn::make('plays')->sortable()->toggleable(),
+    ]));
+    $host->tableColumns = [['type' => 'column', 'name' => 'plays', 'isToggled' => false, 'isToggledHiddenByDefault' => false]];
+
+    $table = $host->getTable();
+
+    expect($table->getSortableVisibleColumn('title'))->toBeNull()
+        ->and($table->getSortableVisibleColumn('plays'))->toBe($table->getColumn('plays'));
 });
