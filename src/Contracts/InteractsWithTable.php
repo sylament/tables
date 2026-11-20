@@ -128,7 +128,9 @@ interface InteractsWithTable
 
     /**
      * The same dataset narrowed to the page's own record keys, or null where there
-     * is no page to narrow to. Read by the summary band for its page row.
+     * is no page to narrow to, or the dataset itself where one page holds all of
+     * it and the narrowing would name every key it already has. Read by the summary
+     * band for its page row, which it asks for only across pages.
      */
     public function getPageTableSummaryQuery(): ?QueryBuilder;
 

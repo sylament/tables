@@ -13,6 +13,7 @@ use Doctrine\ORM\QueryBuilder;
 use LogicException;
 use Stringable;
 use Sylament\Schemas\Components\Concerns\CanAccessProperties;
+use Sylament\Schemas\Query\SortDirections;
 use Sylament\Support\Components\Component;
 use Sylament\Support\Contracts\HasLabel;
 use Sylament\Support\Evaluation\ClosureParameter;
@@ -327,7 +328,7 @@ class Group extends Component
             ]), $query);
         }
 
-        return $query->addOrderBy(ColumnPathResolver::resolveOrderable($query, $this->getColumn()), $direction);
+        return $query->addOrderBy(ColumnPathResolver::resolveOrderable($query, $this->getColumn()), SortDirections::from($direction));
     }
 
     /**
@@ -415,6 +416,10 @@ class Group extends Component
 
         if ($title instanceof HasLabel) {
             $title = $title->getLabel();
+        }
+
+        if ($title instanceof BackedEnum) {
+            $title = $title->value;
         }
 
         if ($title instanceof Markup) {

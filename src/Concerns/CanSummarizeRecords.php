@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace Sylament\Tables\Concerns;
 
 use Doctrine\ORM\QueryBuilder;
-use Doctrine\ORM\Tools\Pagination\Paginator as DoctrinePaginator;
+use Sylament\Schemas\Identity\IdentifierConstraint;
 use Sylament\Support\Pagination\Paginator;
 use Sylament\Tables\Columns\Summarizers\Contracts\HasSelectAlias;
 use Sylament\Tables\Grouping\Group;
 use Sylament\Tables\Query\AggregateDeclaration;
-use Sylament\Tables\Query\JoinCardinality;
 use Sylament\Tables\Query\SummaryQuery;
 
 trait CanSummarizeRecords
@@ -28,9 +27,14 @@ trait CanSummarizeRecords
     /**
      * The same dataset narrowed to the keys of the page on screen — never by a limit,
      * which would bound the aggregate's own result row and read as the all-table
-     * figure. Null where there is no page to narrow to: off the query lane, on an
-     * unpaginated table, and on an empty page, whose empty key list would bind an
-     * `IN ()` most platforms refuse.
+     * figure. One identifier field narrows with an `IN` list, two or more as a
+     * disjunction of per-field equalities, every component bound through its own
+     * DBAL type. Null where there is no page to narrow to: off the query lane, on an
+     * unpaginated table, and on an empty page, whose empty key list would narrow to
+     * `1 = 0` and publish a figure over nothing in place of no figure at all.
+     *
+     * Un-narrowed where the paginator reports one page, the page being the whole
+     * filtered set there.
      */
     public function getPageTableSummaryQuery(): ?QueryBuilder
     {
@@ -42,18 +46,26 @@ trait CanSummarizeRecords
         }
 
         $keys = array_keys($paginator->getRecords());
-        $table = $this->getTable();
-        $recordClass = $table->getRecordClass();
-        $entityManager = $table->getQueryEntityManager();
+        $recordClass = $this->getTable()->getRecordClass();
         $rootAlias = $query->getRootAliases()[0] ?? null;
 
-        if ($keys === [] || $recordClass === null || $entityManager === null || $rootAlias === null) {
+        if ($keys === [] || $recordClass === null || $rootAlias === null) {
             return null;
         }
 
-        return $query
-            ->andWhere(sprintf('%s.%s IN (:sylament_summary_keys)', $rootAlias, $entityManager->getClassMetadata($recordClass)->getSingleIdentifierFieldName()))
-            ->setParameter('sylament_summary_keys', array_map(strval(...), $keys));
+        // Below the empty-page guard, never above it: an empty table reports one page
+        // too, and it owes null rather than a figure over everything.
+        if (!$paginator->hasPages()) {
+            return $query;
+        }
+
+        return $query->andWhere(IdentifierConstraint::in(
+            $query,
+            $rootAlias,
+            $recordClass,
+            array_map(strval(...), $keys),
+            'sylament_summary_keys',
+        ));
     }
 
     /**
@@ -159,7 +171,8 @@ trait CanSummarizeRecords
      * of the query. The column's expression is resolved only once one of its
      * summarizers has passed all three *and* is visible here, so a path the qualifier
      * refuses is refused for the summarizers that would have aggregated it and for
-     * nobody else.
+     * nobody else. A to-one path is joined onto a clone the batch reads, never onto the
+     * row's own builder, whose key the visibility cache answers by for the whole render.
      *
      * @return array<string, mixed> alias ⇒ raw driver value, empty when nothing batches
      */
@@ -171,6 +184,7 @@ trait CanSummarizeRecords
 
         $selects = [];
         $ordinal = 0;
+        $read = clone $query;
 
         foreach ($this->getTable()->getVisibleColumns() as $column) {
             $visibleSummarizers = $column->getSummarizers($query);
@@ -193,7 +207,7 @@ trait CanSummarizeRecords
                     continue;
                 }
 
-                $attribute ??= SummaryQuery::qualifyAttribute($query, $column->getName());
+                $attribute ??= SummaryQuery::qualifyAttribute($read, $column->getName());
 
                 foreach ($summarizer->selectAlias($alias)->getSelectStatements($attribute) as $statementAlias => $statement) {
                     $selects[] = "{$statement} AS {$statementAlias}";
@@ -201,7 +215,7 @@ trait CanSummarizeRecords
             }
         }
 
-        return $selects === [] ? [] : SummaryQuery::readRow($query, $selects);
+        return $selects === [] ? [] : SummaryQuery::readRow($read, $selects);
     }
 
     /**
@@ -209,27 +223,14 @@ trait CanSummarizeRecords
      * query ends before it — the paginator counted its rows before this read runs,
      * so a page that claims a successor can still be followed by nothing.
      *
-     * A window of one is a window over *rows*, and a to-many fetch join makes rows
-     * and records different things, so that shape is read through Doctrine's own
-     * paginator instead — the guard `paginateTableQuery()` applies to a whole page,
-     * over a page of one.
+     * The window is taken the same way a whole page is — `paginateTableQuery()`'s
+     * own read, over a page of one — on a clone, because that read windows the
+     * builder it is handed.
      *
      * @return object|array<string, mixed>|null
      */
     private function readTableRecordAtOffset(QueryBuilder $query, int $offset): object|array|null
     {
-        $probe = (clone $query)->setFirstResult($offset)->setMaxResults(1);
-
-        if (JoinCardinality::joinsCollection($probe)) {
-            /** @var list<object|array<string, mixed>> $records */
-            $records = iterator_to_array(new DoctrinePaginator($probe->getQuery(), fetchJoinCollection: true)->getIterator(), preserve_keys: false);
-
-            return $records[0] ?? null;
-        }
-
-        /** @var list<object|array<string, mixed>> $records */
-        $records = $probe->getQuery()->getResult();
-
-        return $records[0] ?? null;
+        return $this->readTableRecordWindow(clone $query, $offset, 1)[0] ?? null;
     }
 }

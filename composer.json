@@ -16,7 +16,7 @@
         "php": "^8.5",
         "ext-intl": "*",
         "ext-mbstring": "*",
-        "doctrine/orm": "^3.6",
+        "doctrine/orm": "^3.7",
         "sylament/actions": "self.version",
         "sylament/forms": "self.version",
         "sylament/schemas": "self.version",
@@ -26,8 +26,8 @@
         "symfony/property-access": "^8.1",
         "symfony/service-contracts": "^3.6",
         "symfony/string": "^8.1",
-        "symfony/ux-live-component": "^3.1",
-        "symfony/ux-twig-component": "^3.1",
+        "symfony/ux-live-component": "^3.5",
+        "symfony/ux-twig-component": "^3.5",
         "symfony/validator": "^8.1"
     },
     "suggest": {
@@ -36,11 +36,6 @@
     "autoload": {
         "psr-4": {
             "Sylament\\Tables\\": "src/"
-        }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "Sylament\\Tables\\Tests\\": "tests/"
         }
     }
 }

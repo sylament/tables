@@ -214,8 +214,9 @@ trait CanSearchRecords
     /**
      * Whether any visible column wants an input of its own — the search row's
      * gate, and a per-column-only table's whole affordance, since the toolbar
-     * reads the global flag alone. A column the *user* toggled off still counts:
-     * only the developer's own `hidden()` takes the input away.
+     * reads the global flag alone. A column the *user* toggled off still counts,
+     * so the row stays while its input goes with its cell; only the developer's
+     * own `hidden()` takes the column out of the gate.
      */
     public function isSearchableByColumn(): bool
     {

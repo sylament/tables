@@ -114,8 +114,8 @@ trait HasCellState
      *
      * Otherwise a single value for a name the record answers directly and for a
      * chain of to-one hops; a list — blanks dropped, `distinctList()` applied —
-     * for a path that fans out over a collection, so a to-many column reads the
-     * same shape on every row, one match or none included.
+     * for a path that fans out over a collection, so a row reaching one item
+     * reads a one-item list, and `null` for a row reaching none.
      */
     public function getStateFromRecord(): mixed
     {
@@ -218,10 +218,8 @@ trait HasCellState
     }
 
     /**
-     * Whether the mapping puts a collection on the path, which the values of a
-     * single row cannot say — a row whose to-one hop is null reaches no
-     * collection and would otherwise read as a to-one cell. False on the
-     * records lane, where there is no mapping to ask and the values decide.
+     * Whether the mapping puts a collection on the path; false on the records
+     * lane, where there is no mapping to ask.
      */
     private function pathTraversesToMany(): bool
     {

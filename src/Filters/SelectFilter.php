@@ -174,7 +174,7 @@ class SelectFilter extends BaseFilter
         $alias = str_contains($attribute, '.') ? explode('.', $attribute, 2)[0] : null;
 
         if ($alias !== null && !in_array($alias, $query->getAllAliases(), true)) {
-            throw new LogicException(sprintf('Cannot resolve [%s] for this filter: [%s] is not an alias on the builder, and a filter joins nothing of its own — where sorting and search resolve a dotted name against the mapping, a filter does not. Join and alias the relation where the table query is declared and name that alias here, or take over the comparison with the filter\'s own query() closure.', $attribute, $alias));
+            throw new LogicException(sprintf("Cannot resolve [%s] for this filter: [%s] is not an alias on the builder, and a filter joins nothing of its own — where sorting and search resolve a dotted name against the mapping, a filter does not. Join and alias the relation where the table query is declared and name that alias here, or take over the comparison with the filter's own query() closure.", $attribute, $alias));
         }
 
         return ColumnPathResolver::resolve($query, $attribute);

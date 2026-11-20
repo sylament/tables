@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Sylament\Tables\Concerns;
 
+use Closure;
 use Doctrine\ORM\QueryBuilder;
 use LogicException;
-use Stringable;
+use Sylament\Schemas\Identity\IdentifierConstraint;
 use Sylament\Support\Pagination\Paginator;
 use Sylament\Tables\Grouping\Group;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
@@ -96,6 +97,10 @@ trait HasBulkActions
             return $this->cachedSelectedTableRecords = $this->filterSelectableTableRecords(array_values($resolvedRecords));
         }
 
+        if ($this->hasCompositeTableRecordKeys()) {
+            return $this->cachedSelectedTableRecords = $this->resolveCompositeSelectedTableRecords($shouldFetchSelectedRecords);
+        }
+
         $query = $this->getSelectedTableRecordsQuery($shouldFetchSelectedRecords);
 
         if (!$shouldFetchSelectedRecords) {
@@ -109,13 +114,47 @@ trait HasBulkActions
     }
 
     /**
-     * The table's query narrowed to the selection — `IN` the selected keys, or
-     * `NOT IN` the deselected ones while tracking. The filters are re-applied
+     * The table's query narrowed to the selection through
+     * {@see IdentifierConstraint} — the selected keys, or everything but the
+     * deselected ones while tracking, in whatever shape the record class's
+     * identifier takes. The filters are re-applied
      * only when the table deselects on filtering, which is what makes the
      * surviving selection provably inside them; without that coupling the
      * selection deliberately outlives the filters and must not be constrained.
+     * It binds every selected key in one statement; a selection over a record
+     * class keyed by several fields that outgrows one batch is read through
+     * {@see getSelectedTableRecords()}, which batches.
      */
     public function getSelectedTableRecordsQuery(bool $shouldFetchSelectedRecords = true): QueryBuilder
+    {
+        $query = $this->createSelectionQuery(
+            $shouldFetchSelectedRecords,
+            function (QueryBuilder $query, string $rootAlias): ?string {
+                [, $recordClass] = $this->resolveTableRecordKeyTarget($query);
+
+                if ($this->tracksDeselectedTableRecords()) {
+                    return IdentifierConstraint::notIn($query, $rootAlias, $recordClass, $this->normalizedSelectedTableRecordKeys($this->deselectedTableRecords), 'sylament_selected_record_keys');
+                }
+
+                return IdentifierConstraint::in($query, $rootAlias, $recordClass, $this->normalizedSelectedTableRecordKeys($this->selectedTableRecordKeys), 'sylament_selected_record_keys');
+            },
+        );
+
+        if (!$shouldFetchSelectedRecords) {
+            $this->constrainQueryToSelectableTableRecords($query);
+        }
+
+        return $query;
+    }
+
+    /**
+     * The table's query narrowed by one key predicate — none when the predicate
+     * has nothing to exclude — eager-loaded on a fetching read and re-filtered
+     * where the table deselects on filtering.
+     *
+     * @param Closure|null $narrow given the query and its root alias, answers the predicate or null
+     */
+    private function createSelectionQuery(bool $appliesEagerLoading, ?Closure $narrow): QueryBuilder
     {
         $table = $this->getTable();
         $query = $table->getQuery();
@@ -124,26 +163,19 @@ trait HasBulkActions
             throw new LogicException(sprintf('Table [%s] resolves selected records from a query it does not have; a records() table resolves them from its page.', static::class));
         }
 
-        $identifier = $this->resolveTableRecordKeyExpression($query);
+        [$rootAlias] = $this->resolveTableRecordKeyTarget($query);
 
-        if ($this->tracksDeselectedTableRecords()) {
-            $deselectedKeys = $this->normalizedSelectedTableRecordKeys($this->deselectedTableRecords);
+        if ($narrow instanceof Closure) {
+            $predicate = $narrow($query, $rootAlias);
 
-            // An empty exclusion set means every row, so the constraint is
-            // omitted rather than emitted: Doctrine expands an empty list
-            // parameter to NULL, and `NOT IN (NULL)` matches nothing.
-            if ($deselectedKeys !== []) {
-                $query
-                    ->andWhere(sprintf('%s NOT IN (:sylament_selected_record_keys)', $identifier))
-                    ->setParameter('sylament_selected_record_keys', $deselectedKeys);
+            // Nothing left to exclude means every row, so no predicate is emitted:
+            // one built from no key at all would exclude everything instead.
+            if (is_string($predicate)) {
+                $query->andWhere($predicate);
             }
-        } else {
-            $query
-                ->andWhere(sprintf('%s IN (:sylament_selected_record_keys)', $identifier))
-                ->setParameter('sylament_selected_record_keys', $this->normalizedSelectedTableRecordKeys($this->selectedTableRecordKeys));
         }
 
-        if ($shouldFetchSelectedRecords) {
+        if ($appliesEagerLoading) {
             foreach ($table->getColumns() as $column) {
                 $column->applyEagerLoading($query);
             }
@@ -153,11 +185,103 @@ trait HasBulkActions
             $this->filterTableQuery($query);
         }
 
-        if (!$shouldFetchSelectedRecords) {
-            $this->constrainQueryToSelectableTableRecords($query, $identifier);
+        return $query;
+    }
+
+    /**
+     * Whether the table keys its records by more than one identifier field.
+     */
+    private function hasCompositeTableRecordKeys(): bool
+    {
+        $table = $this->getTable();
+        $recordClass = $table->getRecordClass();
+        $entityManager = $table->getQueryEntityManager();
+
+        return $recordClass !== null
+            && $entityManager !== null
+            && $entityManager->getClassMetadata($recordClass)->isIdentifierComposite;
+    }
+
+    /**
+     * The selection read one batch of keys a statement. Records are read on a
+     * fetching read and wherever selectability is a PHP predicate, then filtered
+     * and keyed here rather than bound back as a second key list.
+     *
+     * @return list<object|array<string, mixed>>|list<string>
+     */
+    private function resolveCompositeSelectedTableRecords(bool $shouldFetchSelectedRecords): array
+    {
+        $readsRecords = $shouldFetchSelectedRecords || $this->getTable()->checksIfRecordIsSelectable();
+        $records = [];
+        $keys = [];
+
+        foreach ($this->createCompositeSelectionQueries($shouldFetchSelectedRecords) as $query) {
+            if ($readsRecords) {
+                /** @var list<object> $batch */
+                $batch = $query->getQuery()->getResult();
+                array_push($records, ...$batch);
+
+                continue;
+            }
+
+            array_push($keys, ...$this->pluckTableRecordKeys($query));
         }
 
-        return $query;
+        if ($shouldFetchSelectedRecords) {
+            return $this->filterSelectableTableRecords(array_values(array_combine(array_map(spl_object_id(...), $records), $records)));
+        }
+
+        if (!$readsRecords) {
+            return array_values(array_unique($keys));
+        }
+
+        return array_values(array_unique(array_map(
+            $this->getTableRecordKey(...),
+            $this->filterSelectableTableRecords($records),
+        )));
+    }
+
+    /**
+     * One query a batch of selected keys. While tracking, a deselected bag that
+     * fits one batch stays one exclusion; a larger one is subtracted in PHP from
+     * every key the table admits.
+     *
+     * @return list<QueryBuilder>
+     */
+    private function createCompositeSelectionQueries(bool $appliesEagerLoading): array
+    {
+        $table = $this->getTable();
+        $entityManager = $table->getQueryEntityManager()
+            ?? throw new LogicException(sprintf('Table [%s] reads a selection through a query no entity manager runs.', static::class));
+        $recordClass = $table->getRecordClass()
+            ?? throw new LogicException(sprintf('Table [%s] must have [query()] to resolve records by key.', static::class));
+
+        if ($this->tracksDeselectedTableRecords()) {
+            $deselected = array_values(array_unique($this->normalizedSelectedTableRecordKeys($this->deselectedTableRecords)));
+
+            if (count(IdentifierConstraint::chunk($entityManager, $recordClass, $deselected)) <= 1) {
+                return [$this->createSelectionQuery(
+                    $appliesEagerLoading,
+                    static fn (QueryBuilder $query, string $rootAlias): ?string => IdentifierConstraint::notIn($query, $rootAlias, $recordClass, $deselected, 'sylament_selected_record_keys'),
+                )];
+            }
+
+            $excluded = array_flip($deselected);
+            $keys = array_values(array_filter(
+                $this->pluckTableRecordKeys($this->createSelectionQuery(false, null)),
+                static fn (string $key): bool => !isset($excluded[$key]),
+            ));
+        } else {
+            $keys = $this->normalizedSelectedTableRecordKeys($this->selectedTableRecordKeys);
+        }
+
+        return array_map(
+            fn (array $batch): QueryBuilder => $this->createSelectionQuery(
+                $appliesEagerLoading,
+                static fn (QueryBuilder $query, string $rootAlias): string => IdentifierConstraint::in($query, $rootAlias, $recordClass, $batch, 'sylament_selected_record_keys'),
+            ),
+            IdentifierConstraint::batch($entityManager, $recordClass, $keys),
+        );
     }
 
     /**
@@ -394,13 +518,15 @@ trait HasBulkActions
      * the selectability callback has to reach the query itself — otherwise a
      * DQL bulk write would touch rows the table refuses to let the user select.
      */
-    private function constrainQueryToSelectableTableRecords(QueryBuilder $query, string $identifier): void
+    private function constrainQueryToSelectableTableRecords(QueryBuilder $query): void
     {
         $table = $this->getTable();
 
         if (!$table->checksIfRecordIsSelectable()) {
             return;
         }
+
+        [$rootAlias, $recordClass] = $this->resolveTableRecordKeyTarget($query);
 
         $selectableKeys = [];
 
@@ -415,9 +541,7 @@ trait HasBulkActions
             $selectableKeys[] = $this->getTableRecordKey($record);
         }
 
-        $query
-            ->andWhere(sprintf('%s IN (:sylament_selectable_record_keys)', $identifier))
-            ->setParameter('sylament_selectable_record_keys', $selectableKeys);
+        $query->andWhere(IdentifierConstraint::in($query, $rootAlias, $recordClass, $selectableKeys, 'sylament_selectable_record_keys'));
     }
 
     /**
@@ -425,26 +549,18 @@ trait HasBulkActions
      */
     private function pluckTableRecordKeys(QueryBuilder $query): array
     {
-        /** @var list<mixed> $keys */
-        $keys = (clone $query)
-            ->select($this->resolveTableRecordKeyExpression($query))
+        [$rootAlias, $recordClass] = $this->resolveTableRecordKeyTarget($query);
+
+        $keyQuery = clone $query;
+        $selection = IdentifierConstraint::select($keyQuery, $rootAlias, $recordClass);
+
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $keyQuery
+            ->select(...$selection->expressions)
             ->getQuery()
-            ->getSingleColumnResult();
+            ->getScalarResult();
 
-        return array_values(array_unique(array_map(
-            static function (mixed $key): string {
-                if ($key instanceof Stringable) {
-                    $key = (string) $key;
-                }
-
-                if (!is_scalar($key)) {
-                    throw new LogicException(sprintf('A selected record key came back as [%s], which cannot identify a row.', get_debug_type($key)));
-                }
-
-                return (string) $key;
-            },
-            $keys,
-        )));
+        return array_values(array_unique(array_map($selection->keyOf(...), $rows)));
     }
 
     /**
@@ -475,27 +591,19 @@ trait HasBulkActions
     }
 
     /**
-     * The qualified identifier of the table's records — `alias.field`.
+     * The root alias and record class every key predicate on this table is built
+     * against.
+     *
+     * @return array{string, class-string}
      */
-    private function resolveTableRecordKeyExpression(QueryBuilder $query): string
+    private function resolveTableRecordKeyTarget(QueryBuilder $query): array
     {
-        $table = $this->getTable();
-        $entityManager = $table->getQueryEntityManager();
-        $recordClass = $table->getRecordClass();
-
-        if ($entityManager === null || $recordClass === null) {
-            throw new LogicException(sprintf('Table [%s] must have [query()] to resolve records by key.', static::class));
-        }
-
-        $metadata = $entityManager->getClassMetadata($recordClass);
-
-        if ($metadata->isIdentifierComposite) {
-            throw new LogicException(sprintf('Records of [%s] carry a composite identifier, which a table cannot key; use single-identifier entities or the records() lane.', $recordClass));
-        }
+        $recordClass = $this->getTable()->getRecordClass()
+            ?? throw new LogicException(sprintf('Table [%s] must have [query()] to resolve records by key.', static::class));
 
         $rootAlias = $query->getRootAliases()[0]
             ?? throw new LogicException(sprintf('The query of table [%s] names no root alias to resolve records against.', static::class));
 
-        return sprintf('%s.%s', $rootAlias, $metadata->getSingleIdentifierFieldName());
+        return [$rootAlias, $recordClass];
     }
 }

@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Sylament\Tables\Concerns;
 
+use Doctrine\ORM\Query;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\ORM\Tools\Pagination\Paginator as DoctrinePaginator;
 use LogicException;
 use Sylament\Support\Pagination\Paginator;
 use Sylament\Tables\Enums\PaginationMode;
+use Sylament\Tables\Query\FetchJoinPageQuery;
 use Sylament\Tables\Query\JoinCardinality;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveArg;
@@ -130,15 +132,12 @@ trait CanPaginateRecords
         }
 
         $recordsPerPage = (int) $recordsPerPage;
-        $fetchJoinCollection = JoinCardinality::joinsCollection($query);
 
-        $query->setFirstResult(($page - 1) * $recordsPerPage);
-        $query->setMaxResults($mode === PaginationMode::Simple ? $recordsPerPage + 1 : $recordsPerPage);
-
-        $doctrinePaginator = new DoctrinePaginator($query->getQuery(), $fetchJoinCollection);
-
-        /** @var list<object|array<string, mixed>> $records */
-        $records = iterator_to_array($doctrinePaginator->getIterator(), preserve_keys: false);
+        $records = $this->readTableRecordWindow(
+            $query,
+            ($page - 1) * $recordsPerPage,
+            $mode === PaginationMode::Simple ? $recordsPerPage + 1 : $recordsPerPage,
+        );
 
         if ($mode === PaginationMode::Simple) {
             return new Paginator(
@@ -150,6 +149,109 @@ trait CanPaginateRecords
             );
         }
 
-        return new Paginator($this->keyTableRecords($records), $doctrinePaginator->count(), $page, $recordsPerPage);
+        $this->assertTableQueryCarriesNoOutputWalker($query, $this->getCompositeTableRecordClass($query));
+
+        return new Paginator($this->keyTableRecords($records), new DoctrinePaginator($query->getQuery(), JoinCardinality::joinsCollection($query))->count(), $page, $recordsPerPage);
+    }
+
+    /**
+     * One window of the query's records, and the one place that decides how it
+     * is read: a keyed root whose query joins a collection pages through the
+     * two-step read, everything else through Doctrine's own paginator.
+     *
+     * `CanSummarizeRecords::readTableRecordAtOffset()` reads its window of one
+     * from here, so the decision is written once.
+     *
+     * @return list<object|array<string, mixed>>
+     */
+    private function readTableRecordWindow(QueryBuilder $query, int $firstResult, int $maxResults): array
+    {
+        $keyedRecordClass = $this->getKeyedTableRecordClass($query);
+        $joinsCollection = JoinCardinality::joinsCollection($query);
+
+        if ($keyedRecordClass !== null && $joinsCollection) {
+            $this->assertTableQueryCarriesNoOutputWalker($query, $keyedRecordClass);
+
+            return FetchJoinPageQuery::read($query, $keyedRecordClass, $firstResult, $maxResults);
+        }
+
+        $query->setFirstResult($firstResult);
+        $query->setMaxResults($maxResults);
+
+        /** @var list<object|array<string, mixed>> $records */
+        $records = iterator_to_array(new DoctrinePaginator($query->getQuery(), $joinsCollection)->getIterator(), preserve_keys: false);
+
+        return $records;
+    }
+
+    /**
+     * The record class when Doctrine's pagination walkers cannot resolve its
+     * rows through one identifier column — two or more identifier fields, or a
+     * single one that is an association — and null on every other table, which
+     * pages through Doctrine's paginator.
+     *
+     * @return class-string|null
+     */
+    private function getKeyedTableRecordClass(QueryBuilder $query): ?string
+    {
+        $recordClass = $this->getTable()->getRecordClass();
+
+        if ($recordClass === null) {
+            return null;
+        }
+
+        $metadata = $query->getEntityManager()->getClassMetadata($recordClass);
+
+        return $metadata->isIdentifierComposite || $metadata->containsForeignIdentifier ? $recordClass : null;
+    }
+
+    /**
+     * The record class when Doctrine's `CountWalker` cannot total its rows — two
+     * or more identifier fields — and null on every other table, a single
+     * derived identity included: one association identifier is a path that
+     * walker does resolve.
+     *
+     * A composite root is one of the keyed ones, which is why this reads through
+     * `getKeyedTableRecordClass()` rather than beside it.
+     *
+     * @return class-string|null
+     */
+    private function getCompositeTableRecordClass(QueryBuilder $query): ?string
+    {
+        $recordClass = $this->getKeyedTableRecordClass($query);
+
+        if ($recordClass === null) {
+            return null;
+        }
+
+        return $query->getEntityManager()->getClassMetadata($recordClass)->isIdentifierComposite ? $recordClass : null;
+    }
+
+    /**
+     * Refuses a read Doctrine cannot serve once the query carries an output
+     * walker of its own. `$recordClass` is the class the calling site has
+     * already found too widely keyed for what it is about to do, and null where
+     * that site has nothing to refuse.
+     *
+     * Read off the built query rather than the builder, because
+     * `Configuration::setDefaultQueryHints()` reaches only the former.
+     *
+     * @param class-string|null $recordClass
+     *
+     * @throws LogicException when the query sets its own output walker
+     */
+    private function assertTableQueryCarriesNoOutputWalker(QueryBuilder $query, ?string $recordClass): void
+    {
+        if ($recordClass === null) {
+            return;
+        }
+
+        $walker = $query->getQuery()->getHint(Query::HINT_CUSTOM_OUTPUT_WALKER);
+
+        if ($walker === false) {
+            return;
+        }
+
+        throw new LogicException(sprintf('Cannot read table [%s]: the record class [%s] is keyed by more than one field or by an association, and the table query sets its own output walker [%s]. Doctrine pages and counts that shape through a single identifier column, and the identifier read needs its own walker. Drop the hint.', static::class, $recordClass, is_string($walker) ? $walker : get_debug_type($walker)));
     }
 }

@@ -8,8 +8,11 @@ use Closure;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\ORM\Tools\Pagination\Paginator as DoctrinePaginator;
 use LogicException;
+use ReflectionMethod;
 use Stringable;
 use Sylament\Schemas\Components\Concerns\CanAccessProperties;
+use Sylament\Schemas\Identity\IdentifierConstraint;
+use Sylament\Schemas\Identity\RecordKey;
 use Sylament\Support\ArrayRecord;
 use Sylament\Support\Pagination\Paginator;
 use Sylament\Tables\Query\AggregateDeclaration;
@@ -191,6 +194,17 @@ trait HasTable
     }
 
     /**
+     * The key a row renders, is selected and is reordered under. On the query
+     * lane every read that turns a key back into rows — getTableRecord() (and
+     * so row actions, column actions and editable cells), the selection,
+     * select-all, reorder, the aggregate batch and the page summary — decodes
+     * it through RecordKey and IdentifierConstraint and never asks this
+     * method, so an override there must answer the key RecordKey::of()
+     * answers for every row that is an instance of the table's record class;
+     * one answering any other key is refused when the rows are first keyed.
+     * On the records() lane an object row is keyed and read back by this
+     * method alone; an array row is keyed by its `__key` entry and never asks it.
+     *
      * @param object|array<string, mixed> $record
      */
     public function getTableRecordKey(object|array $record): string
@@ -247,6 +261,8 @@ trait HasTable
             $query = $this->getFilteredTableQuery();
 
             if ($query instanceof QueryBuilder) {
+                $this->assertTableQueryCarriesNoOutputWalker($query, $this->getCompositeTableRecordClass($query));
+
                 return new DoctrinePaginator($query->getQuery(), JoinCardinality::joinsCollection($query))->count();
             }
         }
@@ -334,6 +350,7 @@ trait HasTable
     private function keyTableRecords(iterable $records): array
     {
         $keyedRecords = [];
+        $overridesRecordKey = new ReflectionMethod($this, 'getTableRecordKey')->getFileName() !== __FILE__;
 
         foreach ($records as $sourceKey => $record) {
             if (is_array($record)) {
@@ -355,7 +372,14 @@ trait HasTable
                 throw new LogicException(sprintf('Records of table [%s] must be objects or field-keyed arrays, got %s.', static::class, get_debug_type($record)));
             }
 
-            $keyedRecords[$this->getTableRecordKey($record)] = $record;
+            $codecKey = $this->resolveQueryRecordKey($record);
+            $key = $codecKey === null || $overridesRecordKey ? $this->getTableRecordKey($record) : $codecKey;
+
+            if ($codecKey !== null && $codecKey !== $key) {
+                throw new LogicException(sprintf('Table [%s] keys a [%s] row as [%s] through getTableRecordKey(), but its query reads every key back through RecordKey, which keys that row as [%s], so a selection, an action or a reorder would miss the row, and a select-all with that row unticked would act on it too. Answer the key RecordKey::of() answers, or list the rows through records(), where an object row is keyed and read back by getTableRecordKey() alone.', static::class, get_debug_type($record), $key, $codecKey));
+            }
+
+            $keyedRecords[$key] = $record;
         }
 
         $this->fillTableAggregateValues(array_map(static fn (int|string $key): string => (string) $key, array_keys($keyedRecords)));
@@ -382,9 +406,9 @@ trait HasTable
      * the page query stays a plain entity read. A no-op off the query lane,
      * where there is no entity manager to batch against, and asked before the
      * declared query is reached at all, since a records closure wins over one
-     * that must then stay unevaluated. A no-op under `groupsOnly()` too, where
-     * the cells these values fill never render — a divergence, since Filament
-     * fires its own aggregate selects there regardless.
+     * that must then stay unevaluated. A no-op under `groupsOnly()` too while a
+     * grouping is in force, where the cells these values fill never render — a
+     * divergence, since Filament fires its own aggregate selects there regardless.
      *
      * @param list<string> $keys
      */
@@ -399,7 +423,7 @@ trait HasTable
         $entityManager = $table->getQueryEntityManager();
         $recordClass = $table->getRecordClass();
 
-        if ($entityManager === null || $recordClass === null || $keys === [] || $table->isGroupsOnly()) {
+        if ($entityManager === null || $recordClass === null || $keys === [] || ($table->isGroupsOnly() && $table->getGrouping() !== null)) {
             return;
         }
 
@@ -449,20 +473,17 @@ trait HasTable
             throw new LogicException(sprintf('Table [%s] must have [records()], [query()] or [relationship()].', static::class));
         }
 
-        $metadata = $entityManager->getClassMetadata($recordClass);
-
-        if ($metadata->isIdentifierComposite) {
-            throw new LogicException(sprintf('Records of [%s] carry a composite identifier, which a table cannot key; use single-identifier entities or the records() lane.', $recordClass));
-        }
-
         $rootAlias = $query->getRootAliases()[0]
             ?? throw new LogicException(sprintf('The query of table [%s] names no root alias to resolve a record against.', static::class));
 
-        $record = $this->applyFiltersToTableQuery($query, isResolvingRecord: true)
-            ->andWhere(sprintf('%s.%s = :sylament_record_key', $rootAlias, $metadata->getSingleIdentifierFieldName()))
-            ->setParameter('sylament_record_key', $key)
-            ->getQuery()
-            ->getOneOrNullResult();
+        $query = $this->applyFiltersToTableQuery($query, isResolvingRecord: true);
+        $predicate = IdentifierConstraint::equals($query, $rootAlias, $recordClass, $key, 'sylament_record_key');
+
+        if ($predicate === null) {
+            return null;
+        }
+
+        $record = $query->andWhere($predicate)->getQuery()->getOneOrNullResult();
 
         return is_object($record) ? $record : null;
     }
@@ -482,19 +503,6 @@ trait HasTable
             return null;
         }
 
-        $metadata = $entityManager->getClassMetadata($recordClass);
-
-        if ($metadata->isIdentifierComposite) {
-            throw new LogicException(sprintf('Records of [%s] carry a composite identifier, which a table cannot key; use single-identifier entities or the records() lane.', $record::class));
-        }
-
-        $identifierValues = $metadata->getIdentifierValues($record);
-
-        if ($identifierValues === []) {
-            throw new LogicException(sprintf('Object records must expose a readable non-blank identifier; [%s] has none set.', $record::class));
-        }
-
-        return self::toRecordKey(array_first($identifierValues))
-            ?? throw new LogicException(sprintf('The identifier of [%s] is not a printable value.', $record::class));
+        return RecordKey::of($entityManager, $record, $recordClass);
     }
 }

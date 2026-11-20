@@ -36,7 +36,7 @@
                         {% for groupedValue, groupedLabel in groupOrLabel %}
                             <option {{ attrs({
                                 value: groupedValue,
-                                selected: groupedValue == state,
+                                selected: (groupedValue ~ '') is same as state,
                                 disabled: component.isOptionDisabled(groupedValue, groupedLabel),
                             }) }}>{{ groupedLabel }}</option>
                         {% endfor %}
@@ -44,7 +44,7 @@
                 {% else %}
                     <option {{ attrs({
                         value: value,
-                        selected: value == state,
+                        selected: (value ~ '') is same as state,
                         disabled: component.isOptionDisabled(value, groupOrLabel),
                     }) }}>{{ groupOrLabel }}</option>
                 {% endif %}

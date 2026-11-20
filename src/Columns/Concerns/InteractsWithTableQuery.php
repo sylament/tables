@@ -8,6 +8,7 @@ use Closure;
 use Doctrine\ORM\Query\Expr\Orx;
 use Doctrine\ORM\QueryBuilder;
 use Stringable;
+use Sylament\Schemas\Query\SortDirections;
 use Sylament\Tables\Query\AggregateDeclaration;
 use Sylament\Tables\Query\AggregateQuery;
 use Sylament\Tables\Query\ColumnPathResolver;
@@ -41,14 +42,14 @@ trait InteractsWithTableQuery
             $recordClass = $this->getTable()->getRecordClass();
 
             if ($recordClass !== null) {
-                $query->addOrderBy(AggregateQuery::addHiddenSortSelect($query, $recordClass, $this->bindAggregateScope($declaration)), $direction);
+                $query->addOrderBy(AggregateQuery::addHiddenSortSelect($query, $recordClass, $this->bindAggregateScope($declaration)), SortDirections::from($direction));
 
                 return $query;
             }
         }
 
         foreach ($this->getSortColumns() as $sortColumn) {
-            $query->addOrderBy(ColumnPathResolver::resolveOrderable($query, $sortColumn), $direction);
+            $query->addOrderBy(ColumnPathResolver::resolveOrderable($query, $sortColumn), SortDirections::from($direction));
         }
 
         return $query;

@@ -135,11 +135,23 @@ final class RelationJoiner
         $alias = $base;
         $suffix = 2;
 
-        while (in_array($alias, $query->getAllAliases(), true)) {
+        while (self::isAliasTaken($query, $alias)) {
             $alias = "{$base}_{$suffix}";
             $suffix++;
         }
 
         return $alias;
+    }
+
+    /**
+     * An alias declared inside a subselect that reached the builder as a WHERE
+     * string is one `getAllAliases()` never sees, while DQL resolves every
+     * identification variable of a query in one namespace — so a name already
+     * standing in the DQL as an identifier of its own is taken too.
+     */
+    private static function isAliasTaken(QueryBuilder $query, string $alias): bool
+    {
+        return in_array($alias, $query->getAllAliases(), true)
+            || preg_match('/(?<![A-Za-z0-9_:.])' . preg_quote($alias, '/') . '(?![A-Za-z0-9_])/', $query->getDQL()) === 1;
     }
 }

@@ -133,7 +133,7 @@ trait CanSortRecords
         }
 
         foreach ($orderBy as $field => $direction) {
-            $query->addOrderBy(sprintf('%s.%s', $rootAlias, $field), mb_strtolower($direction) === 'desc' ? 'desc' : 'asc');
+            $query->addOrderBy(sprintf('%s.%s', $rootAlias, $field), $direction);
         }
 
         return $query;

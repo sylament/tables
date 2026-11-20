@@ -6,6 +6,7 @@ namespace Sylament\Tables\Concerns;
 
 use Doctrine\ORM\QueryBuilder;
 use LogicException;
+use Sylament\Schemas\Identity\IdentifierConstraint;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveArg;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
@@ -93,7 +94,13 @@ trait CanReorderRecords
 
     /**
      * The submitted keys as managed entities, keyed by record key — the
-     * selection lane's re-resolution, narrowed to the dragged page.
+     * selection lane's re-resolution, one statement per chunk of the order.
+     * Reordering is unpaginated by default, so the order is the whole table and
+     * a single predicate over it would be the widest statement the toolkit
+     * builds. Each chunk narrows a **copy** of the query, because a second
+     * predicate ANDed onto the first answers nothing, and every chunk keeps the
+     * one parameter base: a base carrying a chunk index of its own is what
+     * {@see IdentifierConstraint::assertParameterBase()} refuses.
      *
      * @param list<string> $order
      *
@@ -105,17 +112,22 @@ trait CanReorderRecords
             return [];
         }
 
-        /** @var list<object> $records */
-        $records = $query
-            ->andWhere(sprintf('%s IN (:sylament_reordered_record_keys)', $this->resolveTableRecordKeyExpression($query)))
-            ->setParameter('sylament_reordered_record_keys', $order)
-            ->getQuery()
-            ->getResult();
+        [$rootAlias, $recordClass] = $this->resolveTableRecordKeyTarget($query);
 
         $keyedRecords = [];
 
-        foreach ($records as $record) {
-            $keyedRecords[$this->getTableRecordKey($record)] = $record;
+        foreach (IdentifierConstraint::chunk($query->getEntityManager(), $recordClass, $order) as $chunk) {
+            $chunkQuery = clone $query;
+
+            /** @var list<object> $records */
+            $records = $chunkQuery
+                ->andWhere(IdentifierConstraint::in($chunkQuery, $rootAlias, $recordClass, $chunk, 'sylament_reordered_record_keys'))
+                ->getQuery()
+                ->getResult();
+
+            foreach ($records as $record) {
+                $keyedRecords[$this->getTableRecordKey($record)] = $record;
+            }
         }
 
         return $keyedRecords;

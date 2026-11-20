@@ -11,7 +11,9 @@ use Doctrine\Persistence\ManagerRegistry;
 use LogicException;
 use Stringable;
 use Sylament\Schemas\State\Casts\Contracts\StateCast;
+use Sylament\Schemas\Validation\RecordKeyGuard;
 use Sylament\Tables\Exceptions\RecordWriteException;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Contracts\Service\Attribute\Required;
 
 use function Sylament\Support\blank;
@@ -31,6 +33,13 @@ trait CanUpdateState
     {
         $this->managerRegistry = $managerRegistry;
     }
+
+    /**
+     * The validator the changed-key refusal is raised through, so its message is
+     * translated in the validator's own domain as the form's is; the column's
+     * {@see CanBeValidated} supplies it.
+     */
+    abstract public function getValidator(): ValidatorInterface;
 
     /**
      * The conversions standing between the vocabulary the browser posts and the
@@ -102,6 +111,12 @@ trait CanUpdateState
         $this->writeStateOntoRecord($record, $state);
 
         $manager = $this->getEntityManagerForRecord($record);
+        $refusals = $this->getTable()->getAssociationReader()->withEntityManager($manager)->revertIdentifierChanges($record);
+
+        if ($refusals !== []) {
+            throw new RecordWriteException((string) $this->getValidator()->validate($record, RecordKeyGuard::constraint($refusals))->get(0)->getMessage());
+        }
+
         $manager->persist($record);
         $manager->flush();
 

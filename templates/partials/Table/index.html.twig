@@ -354,11 +354,14 @@
 
         {% if filtersModalVisible %}
             {% set filtersResetAttributes = stimulus_action('live', 'action', parameters: {action: 'resetTableFiltersForm'}) %}
+            {% set filtersFormWidth = component.getFiltersFormWidth ?? 'md' %}
+            {% set filtersFormWidthIsToken = enum_cases('Sylament\\Support\\Enums\\Width') has some (case => case.value is same as filtersFormWidth) %}
 
             <twig:SylamentSupport:Modal
                 :id="component.getFiltersModalId"
                 heading="Filters"
-                :width="component.getFiltersFormWidth ?? 'md'"
+                :width="filtersFormWidthIsToken ? filtersFormWidth : null"
+                :extraWindowAttributes="filtersFormWidthIsToken ? {} : {style: ['max-width: ' ~ filtersFormWidth]}"
             >
                 <twig:block name="content">{{ filtersForm }}</twig:block>
 
@@ -376,11 +379,14 @@
 
         {% if columnManagerModalVisible %}
             {% set columnManagerResetAttributes = stimulus_action('live', 'action', parameters: {action: 'resetTableColumnManager'}) %}
+            {% set columnManagerWidth = component.getColumnManagerWidth ?? 'md' %}
+            {% set columnManagerWidthIsToken = enum_cases('Sylament\\Support\\Enums\\Width') has some (case => case.value is same as columnManagerWidth) %}
 
             <twig:SylamentSupport:Modal
                 :id="component.getColumnManagerModalId"
                 heading="Columns"
-                :width="component.getColumnManagerWidth ?? 'md'"
+                :width="columnManagerWidthIsToken ? columnManagerWidth : null"
+                :extraWindowAttributes="columnManagerWidthIsToken ? {} : {style: ['max-width: ' ~ columnManagerWidth]}"
             >
                 <twig:block name="content">
                     <twig:SylamentTables:ColumnManagerContent
