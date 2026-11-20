@@ -77,10 +77,6 @@ trait TestsRecords
         $host = $this->getTestedTableHost();
         $hostClass = $host::class;
 
-        if (!method_exists($host, 'getAllTableRecordsCount')) {
-            throw new LogicException(sprintf('The [%s] component cannot count its table records: it has no [getAllTableRecordsCount()].', $hostClass));
-        }
-
         Assert::assertSame(
             $count,
             $host->getAllTableRecordsCount(),

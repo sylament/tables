@@ -116,17 +116,7 @@ trait TestsFilters
      */
     private function parseTestedTableFilterName(InteractsWithTable $host, string $name): string
     {
-        if (!method_exists($host, 'parseTableFilterName')) {
-            throw new LogicException(sprintf('The [%s] component keeps no table filters: it has no [parseTableFilterName()].', $host::class));
-        }
-
-        $parsedName = $host->parseTableFilterName($name);
-
-        if (!is_string($parsedName)) {
-            throw new LogicException(sprintf('The [%s] component parsed the filter name [%s] into something that is not a name.', $host::class, $name));
-        }
-
-        return $parsedName;
+        return $host->parseTableFilterName($name);
     }
 
     /**

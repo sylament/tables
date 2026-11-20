@@ -350,7 +350,16 @@ trait CanSearchRecords
                 continue;
             }
 
-            $searches = self::writeTableColumnSearch($searches, $column->getName(), self::readTableColumnSearch($searches, $column->getName()) ?? '');
+            $name = $column->getName();
+            $term = self::readTableColumnSearch($searches, $name);
+
+            if (str_contains($name, '.') && array_key_exists($name, $searches)) {
+                $flat = $searches[$name];
+                unset($searches[$name]);
+                $term = is_string($flat) ? $flat : '';
+            }
+
+            $searches = self::writeTableColumnSearch($searches, $name, $term ?? '');
         }
 
         return $searches;

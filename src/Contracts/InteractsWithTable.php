@@ -204,6 +204,18 @@ interface InteractsWithTable
     public function getAllSelectableTableRecordsCount(): ?int;
 
     /**
+     * How many records the table holds in total, across every page. Read by the
+     * testing helpers.
+     */
+    public function getAllTableRecordsCount(): int;
+
+    /**
+     * Turns a filter class into its default name and returns any other name
+     * unchanged. Read by the testing helpers.
+     */
+    public function parseTableFilterName(string $name): string;
+
+    /**
      * Clears the selection server-side. Called by the filter and search hooks,
      * and by a bulk action that deselects after completion.
      */

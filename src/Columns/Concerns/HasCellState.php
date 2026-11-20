@@ -25,8 +25,6 @@ trait HasCellState
      */
     protected array $cachedState = [];
 
-    protected ?bool $cachedPathTraversesToMany = null;
-
     public function getStateUsing(mixed $callback): static
     {
         $this->getStateUsing = $callback;
@@ -149,7 +147,7 @@ trait HasCellState
 
         [$values, $reachedCollection] = $this->walkRecordPath($record, $segments);
 
-        if (!$reachedCollection && !$this->pathTraversesToMany()) {
+        if (!$reachedCollection) {
             return $values[0] ?? null;
         }
 
@@ -215,40 +213,5 @@ trait HasCellState
         }
 
         return [[$current], false];
-    }
-
-    /**
-     * Whether the mapping puts a collection on the path; false on the records
-     * lane, where there is no mapping to ask.
-     */
-    private function pathTraversesToMany(): bool
-    {
-        if ($this->cachedPathTraversesToMany !== null) {
-            return $this->cachedPathTraversesToMany;
-        }
-
-        $table = isset($this->table) ? $this->getTable() : null;
-        $entityManager = $table?->getQueryEntityManager();
-        $currentClass = $table?->getRecordClass();
-
-        if ($entityManager === null || $currentClass === null) {
-            return $this->cachedPathTraversesToMany = false;
-        }
-
-        foreach (explode('.', $this->getName()) as $segment) {
-            $metadata = $entityManager->getClassMetadata($currentClass);
-
-            if (!$metadata->hasAssociation($segment)) {
-                break;
-            }
-
-            if ($metadata->isCollectionValuedAssociation($segment)) {
-                return $this->cachedPathTraversesToMany = true;
-            }
-
-            $currentClass = $metadata->getAssociationTargetClass($segment);
-        }
-
-        return $this->cachedPathTraversesToMany = false;
     }
 }

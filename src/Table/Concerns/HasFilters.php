@@ -15,6 +15,7 @@ use Sylament\Tables\Enums\FiltersLayout;
 use Sylament\Tables\Enums\FiltersResetActionPosition;
 use Sylament\Tables\Filters\BaseFilter;
 use Sylament\Tables\Twig\TablesIconAlias;
+use Symfony\Contracts\Service\Attribute\Required;
 use Twig\Markup;
 
 trait HasFilters
@@ -48,6 +49,14 @@ trait HasFilters
     protected Action|Closure|null $modifyFiltersApplyActionUsing = null;
 
     protected Action|Closure|null $modifyFiltersRemoveAllActionUsing = null;
+
+    private ?IconManager $filtersIconManager = null;
+
+    #[Required]
+    public function setFiltersIconManager(IconManager $iconManager): void
+    {
+        $this->filtersIconManager = $iconManager;
+    }
 
     public function persistFiltersInSession(bool|Closure $condition = true): static
     {
@@ -399,13 +408,16 @@ trait HasFilters
     }
 
     /**
-     * The alias is resolved when the action evaluates its icon, so a table
-     * built outside the container — a unit fixture — still answers the
-     * fallback glyph rather than failing to resolve the manager.
+     * The manager arrives through a setter of this trait's own name: `Table`
+     * flattens `CanReorderRecords`' `setIconManager()` into the same class, and a
+     * second setter under that name is a trait collision rather than a second
+     * injection. A table built outside the container — a unit fixture — falls
+     * back to a bare manager, which resolves no alias and answers the fallback
+     * glyph rather than failing to build the action.
      */
-    private function resolveFiltersIcon(string $alias, string $fallback): Closure
+    private function resolveFiltersIcon(string $alias, string $fallback): string|BackedEnum|Markup
     {
-        return static fn (?IconManager $icons = null): string|BackedEnum|Markup => $icons?->resolve($alias) ?? $fallback;
+        return ($this->filtersIconManager ??= new IconManager())->resolve($alias) ?? $fallback;
     }
 
     public function isFilterable(): bool
