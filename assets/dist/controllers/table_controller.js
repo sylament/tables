@@ -12,7 +12,7 @@ const RECORD_CHECKBOX_SELECTOR = ".sy-ta-record-checkbox";
 const ROW_SELECTOR = ".sy-ta-row";
 const SELECTED_ROW_CLASS = "sy-selected";
 const BULK_ONLY_SELECTOR = "[data-sy-table-bulk-only]";
-const COUNT_PLACEHOLDER = ":count";
+const COUNT_TOKEN = "__COUNT__";
 const ROW_GROUP_ATTRIBUTE = "data-sy-group";
 const GROUP_KEYS_ATTRIBUTE = "data-sy-group-keys";
 const COLLAPSED_CLASS = "sy-collapsed";
@@ -39,8 +39,7 @@ class table_controller_default extends Controller {
     deferred: { type: Boolean, default: false },
     pollInterval: Number,
     groupsCollapsedByDefault: { type: Boolean, default: false },
-    countOne: String,
-    countMany: String
+    countMessages: Object
   };
   #component = null;
   #unsubscribe = null;
@@ -329,8 +328,10 @@ class table_controller_default extends Controller {
     return this.allSelectableCountValue !== this.#selectedCount(state);
   }
   #countLabel(count) {
-    const template = count === 1 ? this.countOneValue : this.countManyValue;
-    return template.replaceAll(COUNT_PLACEHOLDER, new Intl.NumberFormat().format(count));
+    const messages = this.countMessagesValue;
+    const category = new Intl.PluralRules(document.documentElement.lang || void 0).select(count);
+    const template = messages[category] ?? messages.other ?? "";
+    return template.replaceAll(COUNT_TOKEN, new Intl.NumberFormat().format(count));
   }
   #repaint() {
     if (this.#component === null) {

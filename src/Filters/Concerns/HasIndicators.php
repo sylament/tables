@@ -6,6 +6,8 @@ namespace Sylament\Tables\Filters\Concerns;
 
 use Closure;
 use Sylament\Tables\Filters\Indicator;
+use Symfony\Component\Translation\TranslatableMessage;
+use Symfony\Contracts\Translation\TranslatableInterface;
 use Twig\Markup;
 
 use function Sylament\Support\blank;
@@ -14,13 +16,13 @@ use function Sylament\Support\wrap;
 trait HasIndicators
 {
     /**
-     * @var array<Indicator|string|Markup>|Indicator|string|Markup|Closure|null
+     * @var array<Indicator|string|Markup|TranslatableInterface>|Indicator|string|Markup|TranslatableInterface|Closure|null
      */
-    protected array|Indicator|string|Markup|Closure|null $indicateUsing = null;
+    protected array|Indicator|string|Markup|TranslatableInterface|Closure|null $indicateUsing = null;
 
-    protected Indicator|string|Markup|Closure|null $indicator = null;
+    protected Indicator|string|Markup|TranslatableInterface|Closure|null $indicator = null;
 
-    public function indicator(Indicator|string|Markup|Closure|null $indicator): static
+    public function indicator(Indicator|string|Markup|TranslatableInterface|Closure|null $indicator): static
     {
         $this->indicator = $indicator;
 
@@ -66,10 +68,28 @@ trait HasIndicators
         return $resolved;
     }
 
+    /**
+     * The chip a filter answers by default, `<indicator>: <state>` as one message so a locale words the
+     * pair itself; an indicator that is already a chip is kept, and a `Markup` one reads as its text.
+     */
+    protected function makeStateIndicator(Indicator|string|Markup $indicator, string $state): Indicator
+    {
+        if ($indicator instanceof Indicator) {
+            return $indicator;
+        }
+
+        return Indicator::make(new TranslatableMessage('table.filters.state_indicator', [
+            'indicator' => $indicator instanceof Markup ? strip_tags((string) $indicator) : $indicator,
+            'state' => $state,
+        ], 'sylament-tables'));
+    }
+
     public function getIndicator(): Indicator|string|Markup
     {
         $state = $this->getState();
 
-        return $this->evaluate($this->indicator, ['data' => $state, 'state' => $state]) ?? $this->getLabel();
+        $indicator = $this->evaluate($this->indicator, ['data' => $state, 'state' => $state]) ?? $this->getLabel();
+
+        return $indicator instanceof TranslatableInterface ? (string) $this->translateText($indicator) : $indicator;
     }
 }

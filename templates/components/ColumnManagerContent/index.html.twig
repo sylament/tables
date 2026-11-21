@@ -47,7 +47,7 @@
                         :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::REORDER_HANDLE')"
                         color="gray"
                         size="sm"
-                        :label="'Reorder ' ~ item.name"
+                        :label="'table.column_manager.actions.reorder.label'|trans({column: item.name}, domain: 'sylament-tables')"
                         :data-sortable-handle="true"
                     />
                 {% endif %}

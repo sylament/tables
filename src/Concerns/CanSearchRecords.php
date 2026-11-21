@@ -9,12 +9,14 @@ use Stringable;
 use Sylament\Tables\Columns\Column;
 use Sylament\Tables\Filters\Indicator;
 use Sylament\Tables\Query\SearchTermSplitter;
+use Symfony\Component\Translation\TranslatableMessage;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveArg;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
 use Symfony\UX\LiveComponent\Attribute\PostHydrate;
 use Symfony\UX\LiveComponent\Metadata\UrlMapping;
 use Symfony\UX\TwigComponent\Attribute\PostMount;
+use Twig\Markup;
 
 trait CanSearchRecords
 {
@@ -212,7 +214,12 @@ trait CanSearchRecords
                 continue;
             }
 
-            $indicators[$columnName] = Indicator::make(sprintf('%s: %s', $column->getLabel(), $search));
+            $label = $column->getLabel();
+
+            $indicators[$columnName] = Indicator::make(new TranslatableMessage('table.fields.search.column_indicator', [
+                'column' => $label instanceof Markup ? strip_tags((string) $label) : $label,
+                'term' => $search,
+            ], 'sylament-tables'));
         }
 
         return $indicators;
@@ -242,7 +249,7 @@ trait CanSearchRecords
             return null;
         }
 
-        return Indicator::make('Search: ' . $search);
+        return Indicator::make(new TranslatableMessage('table.fields.search.term_indicator', ['term' => $search], 'sylament-tables'));
     }
 
     protected function applySearchToTableQuery(QueryBuilder $query): QueryBuilder

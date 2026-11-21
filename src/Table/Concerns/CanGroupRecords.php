@@ -10,6 +10,7 @@ use Sylament\Actions\Action;
 use Sylament\Support\Icons\IconManager;
 use Sylament\Tables\Grouping\Group;
 use Sylament\Tables\Twig\TablesIconAlias;
+use Symfony\Component\Translation\TranslatableMessage;
 use Symfony\Contracts\Service\Attribute\Required;
 use Twig\Markup;
 
@@ -207,7 +208,7 @@ trait CanGroupRecords
     public function getGroupRecordsTriggerAction(): Action
     {
         $action = Action::make('groupRecords')
-            ->label('Group')
+            ->label(new TranslatableMessage('table.actions.group.label', domain: 'sylament-tables'))
             ->iconButton()
             ->icon($this->resolveGroupingIcon(TablesIconAlias::ACTIONS_GROUP, 'heroicons:rectangle-stack-20-solid'))
             ->color('gray')

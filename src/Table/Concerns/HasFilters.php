@@ -15,6 +15,7 @@ use Sylament\Tables\Enums\FiltersLayout;
 use Sylament\Tables\Enums\FiltersResetActionPosition;
 use Sylament\Tables\Filters\BaseFilter;
 use Sylament\Tables\Twig\TablesIconAlias;
+use Symfony\Component\Translation\TranslatableMessage;
 use Symfony\Contracts\Service\Attribute\Required;
 use Twig\Markup;
 
@@ -351,7 +352,7 @@ trait HasFilters
     public function getFiltersTriggerAction(): Action
     {
         $action = Action::make('openFilters')
-            ->label('Filter')
+            ->label(new TranslatableMessage('table.actions.filter.label', domain: 'sylament-tables'))
             ->iconButton()
             ->icon($this->resolveFiltersIcon(TablesIconAlias::ACTIONS_FILTER, 'heroicons:funnel-20-solid'))
             ->color('gray')
@@ -374,7 +375,7 @@ trait HasFilters
     public function getFiltersApplyAction(): Action
     {
         $action = Action::make('applyFilters')
-            ->label('Apply filters')
+            ->label(new TranslatableMessage('table.filters.actions.apply.label', domain: 'sylament-tables'))
             ->action('applyTableFilters')
             ->visible($this->hasDeferredFilters())
             ->button()
@@ -392,7 +393,7 @@ trait HasFilters
     public function getFiltersRemoveAllAction(): Action
     {
         $action = Action::make('removeAllFilters')
-            ->label('Remove all filters')
+            ->label(new TranslatableMessage('table.filters.actions.remove_all.label', domain: 'sylament-tables'))
             ->action('removeTableFilters')
             ->iconButton()
             ->icon($this->resolveFiltersIcon(TablesIconAlias::FILTERS_REMOVE_ALL_BUTTON, 'heroicons:x-mark-20-solid'))

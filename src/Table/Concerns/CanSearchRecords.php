@@ -11,6 +11,7 @@ use Stringable;
 use Sylament\Tables\Columns\Column;
 use Sylament\Tables\Filters\Indicator;
 use Sylament\Tables\Query\SearchConstraint;
+use Symfony\Contracts\Translation\TranslatableInterface;
 
 use function Sylament\Support\filled;
 
@@ -23,7 +24,7 @@ trait CanSearchRecords
      */
     protected array $extraSearchableColumns = [];
 
-    protected string|Closure|null $searchPlaceholder = null;
+    protected string|TranslatableInterface|Closure|null $searchPlaceholder = null;
 
     protected ?string $searchDebounce = null;
 
@@ -98,7 +99,7 @@ trait CanSearchRecords
         return false;
     }
 
-    public function searchPlaceholder(string|Closure|null $searchPlaceholder): static
+    public function searchPlaceholder(string|TranslatableInterface|Closure|null $searchPlaceholder): static
     {
         $this->searchPlaceholder = $searchPlaceholder;
 
@@ -107,7 +108,9 @@ trait CanSearchRecords
 
     public function getSearchPlaceholder(): ?string
     {
-        return $this->evaluate($this->searchPlaceholder);
+        $placeholder = $this->translateText($this->evaluate($this->searchPlaceholder));
+
+        return $placeholder === null ? null : (string) $placeholder;
     }
 
     public function searchDebounce(?string $debounce): static

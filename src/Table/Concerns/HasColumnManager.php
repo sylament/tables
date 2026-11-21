@@ -13,6 +13,7 @@ use Sylament\Tables\Columns\Column;
 use Sylament\Tables\Enums\ColumnManagerLayout;
 use Sylament\Tables\Enums\ColumnManagerResetActionPosition;
 use Sylament\Tables\Twig\TablesIconAlias;
+use Symfony\Component\Translation\TranslatableMessage;
 use Symfony\Contracts\Service\Attribute\Required;
 use Twig\Markup;
 
@@ -237,7 +238,7 @@ trait HasColumnManager
     public function getColumnManagerTriggerAction(): Action
     {
         $action = Action::make('openColumnManager')
-            ->label('Column manager')
+            ->label(new TranslatableMessage('table.actions.column_manager.label', domain: 'sylament-tables'))
             ->iconButton()
             ->icon($this->resolveColumnManagerIcon(TablesIconAlias::ACTIONS_COLUMN_MANAGER, 'heroicons:view-columns-20-solid'))
             ->color('gray')
@@ -260,7 +261,7 @@ trait HasColumnManager
     public function getColumnManagerApplyAction(): Action
     {
         $action = Action::make('applyTableColumnManager')
-            ->label('Apply columns')
+            ->label(new TranslatableMessage('table.column_manager.actions.apply.label', domain: 'sylament-tables'))
             ->action('applyTableColumnManager')
             ->visible($this->hasDeferredColumnManager())
             ->button()

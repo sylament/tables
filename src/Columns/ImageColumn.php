@@ -14,6 +14,7 @@ use Sylament\Support\Enums\TextSize;
 use Sylament\Support\Filesystem\FilesystemRegistry;
 use Sylament\Support\Twig\ComponentAttributeBag;
 use Symfony\Contracts\Service\Attribute\Required;
+use Symfony\Contracts\Translation\TranslatableInterface;
 use Traversable;
 
 use function Sylament\Support\blank;
@@ -59,7 +60,7 @@ class ImageColumn extends Column
 
     protected bool|Closure $shouldCheckFileExistence = true;
 
-    protected string|Closure|null $alt = null;
+    protected string|TranslatableInterface|Closure|null $alt = null;
 
     protected string|Closure|null $defaultImageUrl = null;
 
@@ -324,7 +325,7 @@ class ImageColumn extends Column
         return (bool) $this->evaluate($this->shouldCheckFileExistence);
     }
 
-    public function alt(string|Closure|null $alt): static
+    public function alt(string|TranslatableInterface|Closure|null $alt): static
     {
         $this->alt = $alt;
 
@@ -333,7 +334,9 @@ class ImageColumn extends Column
 
     public function getAlt(mixed $state = null): ?string
     {
-        return $this->evaluate($this->alt, ['state' => $state]);
+        $alt = $this->translateText($this->evaluate($this->alt, ['state' => $state]));
+
+        return $alt === null ? null : (string) $alt;
     }
 
     public function defaultImageUrl(string|Closure|null $url): static

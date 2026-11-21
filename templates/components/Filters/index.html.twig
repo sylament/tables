@@ -16,7 +16,7 @@
 
 <div {{ attributes.defaults({class: classes('sy sy-ta-filters')}) }}>
     <div class="sy-ta-filters-header">
-        <{{ headingTag }} class="sy-ta-filters-heading">Filters</{{ headingTag }}>
+        <{{ headingTag }} class="sy-ta-filters-heading">{{ 'table.filters.heading'|trans(domain: 'sylament-tables') }}</{{ headingTag }}>
 
         {% if not resetInFooter %}
             <div class="sy-ta-filters-header-actions">
@@ -25,7 +25,7 @@
                     color="danger"
                     size="sm"
                     {{ ...resetAttributes }}
-                >Reset</twig:SylamentSupport:Link>
+                >{{ 'table.filters.actions.reset.label'|trans(domain: 'sylament-tables') }}</twig:SylamentSupport:Link>
             </div>
         {% endif %}
     </div>
@@ -39,7 +39,7 @@
             {% endif %}
 
             {% if resetInFooter %}
-                <twig:SylamentSupport:Button color="danger" size="sm" {{ ...resetAttributes }}>Reset</twig:SylamentSupport:Button>
+                <twig:SylamentSupport:Button color="danger" size="sm" {{ ...resetAttributes }}>{{ 'table.filters.actions.reset.label'|trans(domain: 'sylament-tables') }}</twig:SylamentSupport:Button>
             {% endif %}
         </div>
     {% endif %}

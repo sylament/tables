@@ -24,6 +24,7 @@ use Sylament\Tables\Query\RelationJoiner;
 use Sylament\Tables\Query\RelationPathResolver;
 use Sylament\Tables\Query\ResolvedRelationPath;
 use Symfony\Component\PropertyAccess\Exception\AccessException;
+use Symfony\Contracts\Translation\TranslatableInterface;
 use Twig\Markup;
 
 use function Sylament\Support\blank;
@@ -52,7 +53,7 @@ class Group extends Component
 
     protected ?Closure $scopeQueryByKeyUsing = null;
 
-    protected string|Markup|Closure|null $label = null;
+    protected string|Markup|TranslatableInterface|Closure|null $label = null;
 
     protected string $id;
 
@@ -126,7 +127,7 @@ class Group extends Component
         return $this;
     }
 
-    public function label(string|Markup|Closure|null $label): static
+    public function label(string|Markup|TranslatableInterface|Closure|null $label): static
     {
         $this->label = $label;
 
@@ -217,7 +218,7 @@ class Group extends Component
         $label = $this->evaluate($this->label);
 
         if ($label !== null) {
-            return $label;
+            return $label instanceof TranslatableInterface ? (string) $this->translateText($label) : $label;
         }
 
         return (string) u($this->getId())
@@ -415,7 +416,9 @@ class Group extends Component
             : $this->readColumn($record);
 
         if ($title instanceof HasLabel) {
-            $title = $title->getLabel();
+            $title = $this->translateText($title->getLabel());
+        } elseif ($title instanceof TranslatableInterface) {
+            $title = $this->translateText($title);
         }
 
         if ($title instanceof BackedEnum) {
@@ -568,6 +571,10 @@ class Group extends Component
 
     private function toRenderable(mixed $value): string|Markup|null
     {
+        if ($value instanceof TranslatableInterface) {
+            $value = $this->translateText($value);
+        }
+
         return $value instanceof Markup ? $value : $this->toStringKey($value);
     }
 }

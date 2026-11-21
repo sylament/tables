@@ -20,6 +20,7 @@ use Sylament\Support\Enums\ArgumentValue;
 use Sylament\Tables\Columns\TextColumn;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizerInterface;
 use Symfony\Contracts\Service\Attribute\Required;
+use Symfony\Contracts\Translation\TranslatableInterface;
 use Twig\Markup;
 
 use function Sylament\Support\blank;
@@ -39,9 +40,9 @@ trait CanFormatState
 
     protected string|Closure|null $wordLimitEnd = null;
 
-    protected string|Markup|Closure|null $prefix = null;
+    protected string|Markup|TranslatableInterface|Closure|null $prefix = null;
 
-    protected string|Markup|Closure|null $suffix = null;
+    protected string|Markup|TranslatableInterface|Closure|null $suffix = null;
 
     protected string|Closure|null $timezone = null;
 
@@ -343,14 +344,14 @@ trait CanFormatState
         return $this->evaluate($this->commonMarkExtensions) ?? [];
     }
 
-    public function prefix(string|Markup|Closure|null $prefix): static
+    public function prefix(string|Markup|TranslatableInterface|Closure|null $prefix): static
     {
         $this->prefix = $prefix;
 
         return $this;
     }
 
-    public function suffix(string|Markup|Closure|null $suffix): static
+    public function suffix(string|Markup|TranslatableInterface|Closure|null $suffix): static
     {
         $this->suffix = $suffix;
 
@@ -379,12 +380,12 @@ trait CanFormatState
 
     public function getPrefix(): string|Markup|null
     {
-        return $this->evaluate($this->prefix);
+        return $this->translateText($this->evaluate($this->prefix));
     }
 
     public function getSuffix(): string|Markup|null
     {
-        return $this->evaluate($this->suffix);
+        return $this->translateText($this->evaluate($this->suffix));
     }
 
     public function getTimezone(): string
@@ -447,9 +448,11 @@ trait CanFormatState
         $isMarkup = $state instanceof Markup;
 
         if ($state instanceof HasLabel) {
-            $state = $state->getLabel();
+            $state = $this->translateText($state->getLabel());
 
             $isMarkup = $state instanceof Markup;
+        } elseif ($state instanceof TranslatableInterface) {
+            $state = $this->translateText($state);
         }
 
         if ($state instanceof BackedEnum) {

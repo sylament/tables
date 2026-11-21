@@ -17,6 +17,7 @@ use Sylament\Schemas\State\Casts\EnumStateCast;
 use Sylament\Tables\Columns\Concerns\CanBeValidated;
 use Sylament\Tables\Columns\Concerns\CanUpdateState;
 use Sylament\Tables\Columns\Contracts\Editable;
+use Symfony\Component\Translation\TranslatableMessage;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\Constraints\Choice;
 use Twig\Markup;
@@ -50,7 +51,7 @@ class SelectColumn extends Column implements Editable
 
         $this->disabledClick();
 
-        $this->placeholder('Select an option');
+        $this->placeholder(new TranslatableMessage('table.columns.select.placeholder', domain: 'sylament-tables'));
     }
 
     public function rememberOptions(bool|Closure $condition = true): static

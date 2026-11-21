@@ -11,6 +11,7 @@ use Sylament\Forms\Components\Select;
 use Sylament\Tables\Filters\Concerns\HasOptions;
 use Sylament\Tables\Filters\Concerns\HasPlaceholder;
 use Sylament\Tables\Query\ColumnPathResolver;
+use Symfony\Component\Translation\TranslatableMessage;
 
 use function Sylament\Support\filled;
 use function Sylament\Support\wrap;
@@ -34,7 +35,9 @@ class SelectFilter extends BaseFilter
 
         $this->resetState(fn (): array => $this->isMultiple() ? ['values' => []] : ['value' => null]);
 
-        $this->placeholder('All');
+        $this->placeholder(fn (): TranslatableMessage => $this->isMultiple()
+            ? new TranslatableMessage('table.filters.multi_select.placeholder', domain: 'sylament-tables')
+            : new TranslatableMessage('table.filters.select.placeholder', domain: 'sylament-tables'));
 
         $this->indicateUsing(function (array $state): array {
             $labels = $this->getStateLabels(
@@ -45,13 +48,7 @@ class SelectFilter extends BaseFilter
                 return [];
             }
 
-            $indicator = $this->getIndicator();
-
-            if (!$indicator instanceof Indicator) {
-                $indicator = Indicator::make("{$indicator}: {$this->joinStateLabels($labels)}");
-            }
-
-            return [$indicator];
+            return [$this->makeStateIndicator($this->getIndicator(), $this->joinStateLabels($labels))];
         });
     }
 
@@ -240,6 +237,6 @@ class SelectFilter extends BaseFilter
 
         $last = array_pop($labels);
 
-        return implode(', ', $labels) . ' & ' . $last;
+        return (string) $this->translateText(new TranslatableMessage('table.filters.select.labels_joined', ['labels' => implode(', ', $labels), 'last' => $last], 'sylament-tables'));
     }
 }

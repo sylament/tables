@@ -23,7 +23,7 @@
 
 <div {{ attributes.defaults({class: classes('sy sy-ta-col-manager')}) }}>
     <div class="sy-ta-col-manager-header">
-        <{{ headingTag }} class="sy-ta-col-manager-heading">Columns</{{ headingTag }}>
+        <{{ headingTag }} class="sy-ta-col-manager-heading">{{ 'table.column_manager.heading'|trans(domain: 'sylament-tables') }}</{{ headingTag }}>
 
         {% if not resetInFooter %}
             <div class="sy-ta-col-manager-header-actions">
@@ -32,7 +32,7 @@
                     color="danger"
                     size="sm"
                     {{ ...resetAttributes }}
-                >Reset</twig:SylamentSupport:Link>
+                >{{ 'table.column_manager.actions.reset.label'|trans(domain: 'sylament-tables') }}</twig:SylamentSupport:Link>
             </div>
         {% endif %}
     </div>
@@ -54,7 +54,7 @@
             {% endif %}
 
             {% if resetInFooter %}
-                <twig:SylamentSupport:Button color="danger" size="sm" {{ ...resetAttributes }}>Reset</twig:SylamentSupport:Button>
+                <twig:SylamentSupport:Button color="danger" size="sm" {{ ...resetAttributes }}>{{ 'table.column_manager.actions.reset.label'|trans(domain: 'sylament-tables') }}</twig:SylamentSupport:Button>
             {% endif %}
         </div>
     {% endif %}

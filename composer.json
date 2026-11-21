@@ -26,9 +26,12 @@
         "symfony/property-access": "^8.1",
         "symfony/service-contracts": "^3.6",
         "symfony/string": "^8.1",
+        "symfony/translation": "^8.1",
+        "symfony/translation-contracts": "^3.6",
         "symfony/ux-live-component": "^3.5",
         "symfony/ux-twig-component": "^3.5",
-        "symfony/validator": "^8.1"
+        "symfony/validator": "^8.1",
+        "symfony/yaml": "^8.1"
     },
     "suggest": {
         "league/commonmark": "Renders TextColumn::markdown() cells; without it the column throws when markdown() is set."

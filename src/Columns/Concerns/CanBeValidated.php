@@ -18,6 +18,7 @@ use Symfony\Component\Validator\Constraints\NotNull;
 use Symfony\Component\Validator\Constraints\Type;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Contracts\Service\Attribute\Required;
+use Symfony\Contracts\Translation\TranslatableInterface;
 
 trait CanBeValidated
 {
@@ -27,7 +28,7 @@ trait CanBeValidated
     protected array $constraints = [];
 
     /**
-     * @var array<class-string<Constraint>, string|Closure|array<string, string|Closure>>
+     * @var array<class-string<Constraint>, string|TranslatableInterface|Closure|array<string, string|TranslatableInterface|Closure>>
      */
     protected array $validationMessages = [];
 
@@ -65,7 +66,7 @@ trait CanBeValidated
     }
 
     /**
-     * @param array<class-string<Constraint>, string|Closure|array<string, string|Closure>> $messages
+     * @param array<class-string<Constraint>, string|TranslatableInterface|Closure|array<string, string|TranslatableInterface|Closure>> $messages
      */
     public function validationMessages(array $messages): static
     {
@@ -87,7 +88,7 @@ trait CanBeValidated
 
         foreach ($this->validationMessages as $constraintClass => $options) {
             $evaluated = array_filter(array_map(
-                fn (string|Closure $message): string => $this->evaluate($message),
+                fn (string|TranslatableInterface|Closure $message): string => (string) $this->translateText($this->evaluate($message)),
                 is_array($options) ? $options : ['message' => $options],
             ));
 

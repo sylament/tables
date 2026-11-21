@@ -5,15 +5,16 @@ declare(strict_types=1);
 namespace Sylament\Tables\Columns\Concerns;
 
 use Closure;
+use Symfony\Contracts\Translation\TranslatableInterface;
 use Twig\Markup;
 
 trait HasDescription
 {
-    protected string|Markup|Closure|null $descriptionAbove = null;
+    protected string|Markup|TranslatableInterface|Closure|null $descriptionAbove = null;
 
-    protected string|Markup|Closure|null $descriptionBelow = null;
+    protected string|Markup|TranslatableInterface|Closure|null $descriptionBelow = null;
 
-    public function description(string|Markup|Closure|null $description, string|Closure|null $position = 'below'): static
+    public function description(string|Markup|TranslatableInterface|Closure|null $description, string|Closure|null $position = 'below'): static
     {
         if ($position === 'above') {
             $this->descriptionAbove = $description;
@@ -26,12 +27,12 @@ trait HasDescription
 
     public function getDescriptionAbove(): string|Markup|null
     {
-        return $this->evaluate($this->descriptionAbove);
+        return $this->translateText($this->evaluate($this->descriptionAbove));
     }
 
     public function getDescriptionBelow(): string|Markup|null
     {
-        return $this->evaluate($this->descriptionBelow);
+        return $this->translateText($this->evaluate($this->descriptionBelow));
     }
 
     public function hasDescription(): bool

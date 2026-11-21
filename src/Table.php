@@ -40,6 +40,7 @@ use Sylament\Tables\Table\Concerns\HasRecordClasses;
 use Sylament\Tables\Table\Concerns\HasRecords;
 use Sylament\Tables\Table\Concerns\HasRecordUrl;
 use Sylament\Tables\Table\Concerns\HasToolbarActions;
+use Symfony\Component\Translation\TranslatableMessage;
 
 class Table extends ViewComponent
 {
@@ -95,8 +96,8 @@ class Table extends ViewComponent
     {
         parent::setUp();
 
-        $this->emptyStateDescription(fn (Table $table): ?string => $table->hasAction('create')
-            ? sprintf('Create a %s to get started.', $table->getRecordLabel())
+        $this->emptyStateDescription(fn (Table $table): ?TranslatableMessage => $table->hasAction('create')
+            ? new TranslatableMessage('table.empty.description', ['model' => $table->getRecordLabel()], 'sylament-tables')
             : null);
     }
 

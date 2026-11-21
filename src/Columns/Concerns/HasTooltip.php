@@ -5,17 +5,18 @@ declare(strict_types=1);
 namespace Sylament\Tables\Columns\Concerns;
 
 use Closure;
+use Symfony\Contracts\Translation\TranslatableInterface;
 use Twig\Markup;
 
 trait HasTooltip
 {
-    protected string|Markup|Closure|null $tooltip = null;
+    protected string|Markup|TranslatableInterface|Closure|null $tooltip = null;
 
-    protected string|Markup|Closure|null $headerTooltip = null;
+    protected string|Markup|TranslatableInterface|Closure|null $headerTooltip = null;
 
-    protected string|Markup|Closure|null $emptyTooltip = null;
+    protected string|Markup|TranslatableInterface|Closure|null $emptyTooltip = null;
 
-    public function tooltip(string|Markup|Closure|null $tooltip): static
+    public function tooltip(string|Markup|TranslatableInterface|Closure|null $tooltip): static
     {
         $this->tooltip = $tooltip;
 
@@ -24,10 +25,10 @@ trait HasTooltip
 
     public function getTooltip(mixed $state = null): string|Markup|null
     {
-        return $this->evaluate($this->tooltip, ['state' => $state]);
+        return $this->translateText($this->evaluate($this->tooltip, ['state' => $state]));
     }
 
-    public function headerTooltip(string|Markup|Closure|null $tooltip): static
+    public function headerTooltip(string|Markup|TranslatableInterface|Closure|null $tooltip): static
     {
         $this->headerTooltip = $tooltip;
 
@@ -36,10 +37,10 @@ trait HasTooltip
 
     public function getHeaderTooltip(): string|Markup|null
     {
-        return $this->evaluate($this->headerTooltip);
+        return $this->translateText($this->evaluate($this->headerTooltip));
     }
 
-    public function emptyTooltip(string|Markup|Closure|null $tooltip): static
+    public function emptyTooltip(string|Markup|TranslatableInterface|Closure|null $tooltip): static
     {
         $this->emptyTooltip = $tooltip;
 
@@ -48,7 +49,7 @@ trait HasTooltip
 
     public function getEmptyTooltip(): string|Markup|null
     {
-        return $this->evaluate($this->emptyTooltip);
+        return $this->translateText($this->evaluate($this->emptyTooltip));
     }
 
     public function hasTooltip(): bool

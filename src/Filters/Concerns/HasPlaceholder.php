@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Sylament\Tables\Filters\Concerns;
 
 use Closure;
+use Symfony\Contracts\Translation\TranslatableInterface;
 
 trait HasPlaceholder
 {
-    protected string|Closure|null $placeholder = null;
+    protected string|TranslatableInterface|Closure|null $placeholder = null;
 
-    public function placeholder(string|Closure|null $placeholder): static
+    public function placeholder(string|TranslatableInterface|Closure|null $placeholder): static
     {
         $this->placeholder = $placeholder;
 
@@ -19,6 +20,8 @@ trait HasPlaceholder
 
     public function getPlaceholder(): ?string
     {
-        return $this->evaluate($this->placeholder);
+        $placeholder = $this->translateText($this->evaluate($this->placeholder));
+
+        return $placeholder === null ? null : (string) $placeholder;
     }
 }

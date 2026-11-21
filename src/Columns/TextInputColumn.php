@@ -11,6 +11,7 @@ use Sylament\Forms\Components\Concerns\HasStep;
 use Sylament\Tables\Columns\Concerns\CanBeValidated;
 use Sylament\Tables\Columns\Concerns\CanUpdateState;
 use Sylament\Tables\Columns\Contracts\Editable;
+use Symfony\Contracts\Translation\TranslatableInterface;
 use Twig\Markup;
 
 class TextInputColumn extends Column implements Editable
@@ -26,9 +27,9 @@ class TextInputColumn extends Column implements Editable
 
     protected string|Closure|null $inputMode = null;
 
-    protected string|Markup|Closure|null $prefixLabel = null;
+    protected string|Markup|TranslatableInterface|Closure|null $prefixLabel = null;
 
-    protected string|Markup|Closure|null $suffixLabel = null;
+    protected string|Markup|TranslatableInterface|Closure|null $suffixLabel = null;
 
     protected string|BackedEnum|Markup|Closure|null $prefixIcon = null;
 
@@ -79,7 +80,7 @@ class TextInputColumn extends Column implements Editable
         return $this->evaluate($this->inputMode);
     }
 
-    public function prefix(string|Markup|Closure|null $label, bool|Closure $isInline = false): static
+    public function prefix(string|Markup|TranslatableInterface|Closure|null $label, bool|Closure $isInline = false): static
     {
         $this->prefixLabel = $label;
         $this->inlinePrefix($isInline);
@@ -87,7 +88,7 @@ class TextInputColumn extends Column implements Editable
         return $this;
     }
 
-    public function suffix(string|Markup|Closure|null $label, bool|Closure $isInline = false): static
+    public function suffix(string|Markup|TranslatableInterface|Closure|null $label, bool|Closure $isInline = false): static
     {
         $this->suffixLabel = $label;
         $this->inlineSuffix($isInline);
@@ -147,12 +148,12 @@ class TextInputColumn extends Column implements Editable
 
     public function getPrefixLabel(): string|Markup|null
     {
-        return $this->evaluate($this->prefixLabel);
+        return $this->translateText($this->evaluate($this->prefixLabel));
     }
 
     public function getSuffixLabel(): string|Markup|null
     {
-        return $this->evaluate($this->suffixLabel);
+        return $this->translateText($this->evaluate($this->suffixLabel));
     }
 
     public function getPrefixIcon(): string|BackedEnum|Markup|null

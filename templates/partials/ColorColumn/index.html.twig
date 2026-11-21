@@ -45,7 +45,7 @@
                     ],
                     role: item.copyable ? 'button' : (item.color is not null ? 'img' : null),
                     'aria-label': item.copyable
-                        ? (item.color is not null ? 'Copy ' ~ item.color : 'Copy colour')
+                        ? (item.color is not null ? 'components/copyable.label'|trans({label: item.color}, domain: 'sylament') : 'table.columns.color.copy_label'|trans(domain: 'sylament-tables'))
                         : item.color,
                     title: (itemTooltip is markup ? itemTooltip|striptags : itemTooltip) ?: null,
                     style: item.color is not null ? 'background-color: ' ~ item.color : null,

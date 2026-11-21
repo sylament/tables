@@ -56,6 +56,7 @@
 {% set groupCollapsible = group is not null and group.isCollapsible %}
 {% set groupsCollapsed = groupCollapsible and component.areGroupsCollapsedByDefault %}
 {% set groupLabelPrefix = group is not null and group.isTitlePrefixedWithLabel ? group.getLabel : null %}
+{% set groupLabelText = groupLabelPrefix is not empty ? (groupLabelPrefix is markup ? groupLabelPrefix|striptags : groupLabelPrefix) ~ '' : null %}
 
 {% set filterIndicators = component.getFilterIndicators %}
 {% set removableIndicatorCount = filterIndicators|filter(carrier => carrier.indicator.isRemovable)|length %}
@@ -153,7 +154,7 @@
     {% set groupSelect %}
         <select {{ attrs({
             class: 'sy-fo-select',
-            'aria-label': 'Group by',
+            'aria-label': 'table.grouping.fields.group.label'|trans(domain: 'sylament-tables'),
         }, stimulus_target('sylament--tables--table', 'groupColumn'), stimulus_action('sylament--tables--table', 'group', 'change')) }}>
             <option {{ attrs({value: '', selected: groupColumn is null}) }}>-</option>
 
@@ -169,16 +170,16 @@
     {% set directionSelect %}
         <select {{ attrs({
             class: 'sy-fo-select',
-            'aria-label': 'Group direction',
+            'aria-label': 'table.grouping.fields.direction.label'|trans(domain: 'sylament-tables'),
         }, stimulus_target('sylament--tables--table', 'groupDirection'), stimulus_action('sylament--tables--table', 'group', 'change')) }}>
-            <option {{ attrs({value: 'asc', selected: groupDirection != 'desc'}) }}>Ascending</option>
-            <option {{ attrs({value: 'desc', selected: groupDirection == 'desc'}) }}>Descending</option>
+            <option {{ attrs({value: 'asc', selected: groupDirection != 'desc'}) }}>{{ 'table.grouping.fields.direction.options.asc'|trans(domain: 'sylament-tables') }}</option>
+            <option {{ attrs({value: 'desc', selected: groupDirection == 'desc'}) }}>{{ 'table.grouping.fields.direction.options.desc'|trans(domain: 'sylament-tables') }}</option>
         </select>
     {% endset %}
 
     {% set groupingFieldsDropdown %}
         <label class="sy-ta-grouping-settings-field">
-            <span class="sy-ta-grouping-settings-field-label">Group by</span>
+            <span class="sy-ta-grouping-settings-field-label">{{ 'table.grouping.fields.group.label'|trans(domain: 'sylament-tables') }}</span>
 
             <twig:SylamentSupport:InputWrapper>{{ groupSelect }}</twig:SylamentSupport:InputWrapper>
         </label>
@@ -188,7 +189,7 @@
                 class: 'sy-ta-grouping-settings-field',
                 hidden: groupColumn is null,
             }, stimulus_target('sylament--tables--table', 'groupDirectionField')) }}>
-                <span class="sy-ta-grouping-settings-field-label">Group direction</span>
+                <span class="sy-ta-grouping-settings-field-label">{{ 'table.grouping.fields.direction.label'|trans(domain: 'sylament-tables') }}</span>
 
                 <twig:SylamentSupport:InputWrapper>{{ directionSelect }}</twig:SylamentSupport:InputWrapper>
             </label>
@@ -197,7 +198,7 @@
 
     {% set groupingFieldsInline %}
         <label class="sy-ta-grouping-settings-field">
-            <twig:SylamentSupport:InputWrapper prefix="Group by">{{ groupSelect }}</twig:SylamentSupport:InputWrapper>
+            <twig:SylamentSupport:InputWrapper :prefix="'table.grouping.fields.group.label'|trans(domain: 'sylament-tables')">{{ groupSelect }}</twig:SylamentSupport:InputWrapper>
         </label>
 
         {% if not groupingDirectionHidden %}
@@ -205,7 +206,7 @@
                 class: 'sy-ta-grouping-settings-field',
                 hidden: groupColumn is null,
             }, stimulus_target('sylament--tables--table', 'groupDirectionField')) }}>
-                <span class="sy-sr-only">Group direction</span>
+                <span class="sy-sr-only">{{ 'table.grouping.fields.direction.label'|trans(domain: 'sylament-tables') }}</span>
 
                 <twig:SylamentSupport:InputWrapper>{{ directionSelect }}</twig:SylamentSupport:InputWrapper>
             </label>
@@ -222,8 +223,10 @@
     deferred: isDeferred,
     pollInterval: pollIntervalMilliseconds,
     groupsCollapsedByDefault: component.areGroupsCollapsedByDefault,
-    countOne: '1 record selected',
-    countMany: ':count records selected',
+    countMessages: {
+        one: 'table.selection_indicator.selected_count'|trans({count: 1, shown: '__COUNT__'}, domain: 'sylament-tables'),
+        other: 'table.selection_indicator.selected_count'|trans({count: 2, shown: '__COUNT__'}, domain: 'sylament-tables'),
+    },
 }) : null) }}>
     <div class="sy-ta-ctn">
         {% if headerVisible %}
@@ -309,7 +312,7 @@
                 <div class="sy-ta-header-toolbar-end">
                     {% if isSearchable %}
                         <twig:SylamentTables:SearchField
-                            :placeholder="component.getSearchPlaceholder ?? 'Search'"
+                            :placeholder="component.getSearchPlaceholder ?? 'table.fields.search.placeholder'|trans(domain: 'sylament-tables')"
                             :onBlur="searchOnBlur"
                             :debounceMs="searchDebounceMs"
                         />
@@ -359,7 +362,7 @@
 
             <twig:SylamentSupport:Modal
                 :id="component.getFiltersModalId"
-                heading="Filters"
+                :heading="'table.filters.heading'|trans(domain: 'sylament-tables')"
                 :width="filtersFormWidthIsToken ? filtersFormWidth : null"
                 :extraWindowAttributes="filtersFormWidthIsToken ? {} : {style: ['max-width: ' ~ filtersFormWidth]}"
             >
@@ -371,7 +374,7 @@
                             {{ renderComponent(filtersApplyAction) }}
                         {% endif %}
 
-                        <twig:SylamentSupport:Button color="danger" size="sm" {{ ...filtersResetAttributes }}>Reset</twig:SylamentSupport:Button>
+                        <twig:SylamentSupport:Button color="danger" size="sm" {{ ...filtersResetAttributes }}>{{ 'table.filters.actions.reset.label'|trans(domain: 'sylament-tables') }}</twig:SylamentSupport:Button>
                     </div>
                 </twig:block>
             </twig:SylamentSupport:Modal>
@@ -384,7 +387,7 @@
 
             <twig:SylamentSupport:Modal
                 :id="component.getColumnManagerModalId"
-                heading="Columns"
+                :heading="'table.column_manager.heading'|trans(domain: 'sylament-tables')"
                 :width="columnManagerWidthIsToken ? columnManagerWidth : null"
                 :extraWindowAttributes="columnManagerWidthIsToken ? {} : {style: ['max-width: ' ~ columnManagerWidth]}"
             >
@@ -406,7 +409,7 @@
                             {{ renderComponent(columnManagerApplyAction) }}
                         {% endif %}
 
-                        <twig:SylamentSupport:Button color="danger" size="sm" {{ ...columnManagerResetAttributes }}>Reset</twig:SylamentSupport:Button>
+                        <twig:SylamentSupport:Button color="danger" size="sm" {{ ...columnManagerResetAttributes }}>{{ 'table.column_manager.actions.reset.label'|trans(domain: 'sylament-tables') }}</twig:SylamentSupport:Button>
                     </div>
                 </twig:block>
             </twig:SylamentSupport:Modal>
@@ -415,7 +418,7 @@
         {% if filterIndicators is not empty %}
             <div class="sy-ta-filter-indicators">
                 <div class="sy-ta-filter-indicators-ctn">
-                    <span class="sy-ta-filter-indicators-label">Active filters</span>
+                    <span class="sy-ta-filter-indicators-label">{{ 'table.filters.indicator'|trans(domain: 'sylament-tables') }}</span>
 
                     <div class="sy-ta-filter-indicators-badges-ctn">
                         {% for carrier in filterIndicators %}
@@ -431,7 +434,7 @@
                                 class="sy-ta-filter-indicator"
                                 :color="indicator.getColor ?? 'primary'"
                                 :deletable="indicator.isRemovable"
-                                deleteLabel="Remove filter"
+                                :deleteLabel="'table.filters.actions.remove.label'|trans(domain: 'sylament-tables')"
                                 :deleteAttributes="removeAttributes"
                             >{{ indicator.getLabel }}</twig:SylamentSupport:Badge>
                         {% endfor %}
@@ -454,7 +457,7 @@
                                 icon="heroicons:funnel-20-solid"
                                 :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::ACTIONS_FILTER')"
                                 color="gray"
-                                label="Filter"
+                                :label="'table.actions.filter.label'|trans(domain: 'sylament-tables')"
                             />{{ filtersCountBadge }}</span>
                     </summary>
 
@@ -467,7 +470,7 @@
 
         {% if isReordering %}
             <div class="sy-ta-reorder-indicator" role="status" aria-live="polite">
-                Drag and drop the records into order.
+                {{ 'table.reorder_indicator'|trans(domain: 'sylament-tables') }}
             </div>
         {% elseif isSelectionEnabled and records is not null %}
             <div {{ attrs({
@@ -489,7 +492,7 @@
                             :hidden="true"
                             {{ ...stimulus_target('sylament--tables--table', 'selectAll') }}
                             {{ ...stimulus_action('sylament--tables--table', 'selectAll', 'click') }}
-                        >Select all{{ allSelectableCount is not null ? ' ' ~ allSelectableCount : '' }}</twig:SylamentSupport:Link>
+                        >{{ allSelectableCount is not null ? 'table.selection_indicator.actions.select_all.label'|trans({count: allSelectableCount}, domain: 'sylament-tables') : 'table.selection_indicator.actions.select_all.label_bare'|trans(domain: 'sylament-tables') }}</twig:SylamentSupport:Link>
                     {% endif %}
 
                     <twig:SylamentSupport:Link
@@ -497,7 +500,7 @@
                         color="danger"
                         {{ ...stimulus_target('sylament--tables--table', 'deselectAll') }}
                         {{ ...stimulus_action('sylament--tables--table', 'deselectAll', 'click') }}
-                    >Deselect all</twig:SylamentSupport:Link>
+                    >{{ 'table.selection_indicator.actions.deselect_all.label'|trans(domain: 'sylament-tables') }}</twig:SylamentSupport:Link>
                 </div>
             </div>
         {% endif %}
@@ -506,11 +509,11 @@
             <div class="sy-ta-table-loading-ctn" role="status" aria-busy="true">
                 <twig:SylamentSupport:LoadingIndicator size="2xl" />
 
-                <span class="sy-ta-sr-only">Loading</span>
+                <span class="sy-ta-sr-only">{{ 'table.loading'|trans(domain: 'sylament-tables') }}</span>
             </div>
         {% else %}
             {% if records is not empty or isSearchableByColumn %}
-                {% set actionsHeaderCell %}<th scope="col" aria-label="Actions" class="sy-ta-actions-header-cell sy-ta-empty-header-cell"></th>{% endset %}
+                {% set actionsHeaderCell %}<th scope="col" aria-label="{{ 'table.columns.actions.label'|trans({count: component.getFlatRecordActions|length}, domain: 'sylament-tables') }}" class="sy-ta-actions-header-cell sy-ta-empty-header-cell"></th>{% endset %}
 
                 {% set selectionHeaderCell %}
                     <th scope="col" class="sy-ta-selection-cell">
@@ -520,7 +523,7 @@
                             <input {{ attrs({
                                 type: 'checkbox',
                                 class: 'sy-checkbox sy-ta-page-checkbox',
-                                'aria-label': 'Select/deselect all records on this page for bulk actions.',
+                                'aria-label': 'table.fields.bulk_select_page.label'|trans(domain: 'sylament-tables'),
                             }, stimulus_target('sylament--tables--table', 'pageCheckbox'), stimulus_action('sylament--tables--table', 'togglePage', 'change')) }}>
                         {% endif %}
                     </th>
@@ -664,7 +667,7 @@
                                         {% if isColumnIndividuallySearchable %}
                                             <twig:SylamentTables:SearchField
                                                 :id="columnSearchCellId ~ '.input'"
-                                                :label="columnAriaLabel ? 'Search ' ~ columnAriaLabel : 'Search'"
+                                                :label="columnAriaLabel ? 'table.fields.search.column_label'|trans({column: columnAriaLabel}, domain: 'sylament-tables') : 'table.fields.search.label'|trans(domain: 'sylament-tables')"
                                                 :model="'tableColumnSearches.' ~ columnName"
                                                 :value="component.getLiveComponent.getTableColumnSearch(columnName)"
                                                 :onBlur="searchOnBlur"
@@ -707,7 +710,7 @@
                                             id: groupRowId ~ '.checkbox',
                                             checked: groupKeys is not empty and groupSelectedCount == groupKeys|length,
                                             'data-sy-group-keys': groupKeys|json_encode,
-                                            'aria-label': 'Select/deselect every record in group ' ~ groupTitleText ~ ' for bulk actions.',
+                                            'aria-label': 'table.fields.bulk_select_group.label'|trans({title: groupTitleText}, domain: 'sylament-tables'),
                                         }, stimulus_target('sylament--tables--table', 'groupCheckbox'), stimulus_action('sylament--tables--table', 'toggleGroupRecords', 'change')) }}>
                                     </td>
                                 {% endif %}{% endset %}
@@ -738,7 +741,7 @@
                                         }, groupCollapsible ? stimulus_action('sylament--tables--table', 'toggleGroup', 'click') : null) }}>
                                             <div>
                                                 <{{ emptyStateHeadingTag }} class="sy-ta-group-heading">
-                                                    {%- if groupLabelPrefix is not empty %}{{ groupLabelPrefix }}: {% endif -%}
+                                                    {%- if groupLabelPrefix is not empty %}{{ 'table.grouping.label_prefix'|trans({label: groupLabelText}, domain: 'sylament-tables') }}{% endif -%}
                                                     {{- boundary.title -}}
                                                 </{{ emptyStateHeadingTag }}>
 
@@ -753,7 +756,7 @@
                                                     :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::GROUPING_COLLAPSE_BUTTON')"
                                                     size="sm"
                                                     color="gray"
-                                                    :label="groupLabelPrefix is not empty ? groupLabelPrefix ~ ': ' ~ groupTitleText : groupTitleText"
+                                                    :label="groupLabelPrefix is not empty ? 'table.grouping.label_prefix'|trans({label: groupLabelText}, domain: 'sylament-tables') ~ groupTitleText : groupTitleText"
                                                     :aria-expanded="groupsCollapsed ? 'false' : 'true'"
                                                     {{ ...stimulus_action('sylament--tables--table', 'toggleGroup', 'click') }}
                                                 />
@@ -783,7 +786,7 @@
                                             class: 'sy-checkbox sy-ta-record-checkbox',
                                             value: recordKey,
                                             checked: component.getLiveComponent.isTableRecordSelected(recordKey),
-                                            'aria-label': 'Select/deselect record ' ~ recordKey ~ ' for bulk actions.',
+                                            'aria-label': 'table.fields.bulk_select_record.label'|trans({key: recordKey}, domain: 'sylament-tables'),
                                         }, stimulus_target('sylament--tables--table', 'recordCheckbox'), stimulus_action('sylament--tables--table', 'toggleRecord', 'change')) }}>
                                     {% endif %}
                                 </td>
@@ -808,7 +811,7 @@
                                                 icon="heroicons:bars-2"
                                                 :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::REORDER_HANDLE')"
                                                 color="gray"
-                                                :label="'Reorder item ' ~ recordKey"
+                                                :label="'table.actions.reorder_record.label'|trans({key: recordKey}, domain: 'sylament-tables')"
                                                 :data-sortable-handle="true"
                                             />
                                         </td>
@@ -886,7 +889,7 @@
                                 <twig:SylamentTables:SummaryRow
                                     :id="hostId ~ '.table.group-summary.' ~ ((boundary.key ?? '')|url_encode)"
                                     :columns="summaryColumns"
-                                    :heading="isGroupsOnly ? boundary.title : boundary.title ~ ' summary'"
+                                    :heading="isGroupsOnly ? boundary.title : 'table.summary.subheadings.group'|trans({group: (boundary.title is markup ? boundary.title|striptags : boundary.title) ~ ''}, domain: 'sylament-tables')"
                                     :query="groupSummaryQuery"
                                     :selectedState="component.getLiveComponent.getTableSummarySelectedState(groupSummaryQuery)"
                                     :groupsOnly="isGroupsOnly"

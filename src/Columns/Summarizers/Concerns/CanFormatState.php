@@ -17,6 +17,7 @@ use Sylament\Support\Enums\ArgumentValue;
 use Sylament\Tables\Columns\Summarizers\Summarizer;
 use Symfony\Component\HtmlSanitizer\HtmlSanitizerInterface;
 use Symfony\Contracts\Service\Attribute\Required;
+use Symfony\Contracts\Translation\TranslatableInterface;
 use Twig\Markup;
 
 use function Sylament\Support\blank;
@@ -31,11 +32,11 @@ trait CanFormatState
 
     protected string|Closure|null $characterLimitEnd = null;
 
-    protected string|Closure|null $placeholder = null;
+    protected string|TranslatableInterface|Closure|null $placeholder = null;
 
-    protected string|Markup|Closure|null $prefix = null;
+    protected string|Markup|TranslatableInterface|Closure|null $prefix = null;
 
-    protected string|Markup|Closure|null $suffix = null;
+    protected string|Markup|TranslatableInterface|Closure|null $suffix = null;
 
     protected bool|Closure $isHtml = false;
 
@@ -146,7 +147,7 @@ trait CanFormatState
         return $this;
     }
 
-    public function placeholder(string|Closure|null $placeholder): static
+    public function placeholder(string|TranslatableInterface|Closure|null $placeholder): static
     {
         $this->placeholder = $placeholder;
 
@@ -203,14 +204,14 @@ trait CanFormatState
         return $this->evaluate($this->commonMarkExtensions) ?? [];
     }
 
-    public function prefix(string|Markup|Closure|null $prefix): static
+    public function prefix(string|Markup|TranslatableInterface|Closure|null $prefix): static
     {
         $this->prefix = $prefix;
 
         return $this;
     }
 
-    public function suffix(string|Markup|Closure|null $suffix): static
+    public function suffix(string|Markup|TranslatableInterface|Closure|null $suffix): static
     {
         $this->suffix = $suffix;
 
@@ -229,12 +230,12 @@ trait CanFormatState
 
     public function getPrefix(): string|Markup|null
     {
-        return $this->evaluate($this->prefix);
+        return $this->translateText($this->evaluate($this->prefix));
     }
 
     public function getSuffix(): string|Markup|null
     {
-        return $this->evaluate($this->suffix);
+        return $this->translateText($this->evaluate($this->suffix));
     }
 
     public function isHtml(): bool
@@ -269,9 +270,11 @@ trait CanFormatState
         $isMarkup = $state instanceof Markup;
 
         if ($state instanceof HasLabel) {
-            $state = $state->getLabel();
+            $state = $this->translateText($state->getLabel());
 
             $isMarkup = $state instanceof Markup;
+        } elseif ($state instanceof TranslatableInterface) {
+            $state = $this->translateText($state);
         }
 
         if ($state instanceof BackedEnum) {
@@ -295,7 +298,7 @@ trait CanFormatState
 
         $affixed = $this->affixState($state, $isMarkup);
 
-        return mb_trim((string) $affixed) === '' ? $this->evaluate($this->placeholder) : $affixed;
+        return mb_trim((string) $affixed) === '' ? $this->translateText($this->evaluate($this->placeholder)) : $affixed;
     }
 
     /**

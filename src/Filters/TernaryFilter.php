@@ -7,21 +7,23 @@ namespace Sylament\Tables\Filters;
 use Closure;
 use Doctrine\ORM\QueryBuilder;
 use Sylament\Forms\Components\Select;
+use Symfony\Component\Translation\TranslatableMessage;
+use Symfony\Contracts\Translation\TranslatableInterface;
 
 use function Sylament\Support\blank;
 
 class TernaryFilter extends SelectFilter
 {
-    protected string|Closure|null $falseLabel = null;
+    protected string|TranslatableInterface|Closure|null $falseLabel = null;
 
-    protected string|Closure|null $trueLabel = null;
+    protected string|TranslatableInterface|Closure|null $trueLabel = null;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->trueLabel('Yes');
-        $this->falseLabel('No');
+        $this->trueLabel(new TranslatableMessage('components.select.boolean.true', domain: 'sylament-forms'));
+        $this->falseLabel(new TranslatableMessage('components.select.boolean.false', domain: 'sylament-forms'));
         $this->placeholder('-');
 
         $this->boolean();
@@ -33,24 +35,18 @@ class TernaryFilter extends SelectFilter
 
             $stateLabel = $state['value'] ? $this->getTrueLabel() : $this->getFalseLabel();
 
-            $indicator = $this->getIndicator();
-
-            if (!$indicator instanceof Indicator) {
-                $indicator = Indicator::make("{$indicator}: {$stateLabel}");
-            }
-
-            return [$indicator];
+            return [$this->makeStateIndicator($this->getIndicator(), (string) $stateLabel)];
         });
     }
 
-    public function trueLabel(string|Closure|null $label): static
+    public function trueLabel(string|TranslatableInterface|Closure|null $label): static
     {
         $this->trueLabel = $label;
 
         return $this;
     }
 
-    public function falseLabel(string|Closure|null $label): static
+    public function falseLabel(string|TranslatableInterface|Closure|null $label): static
     {
         $this->falseLabel = $label;
 
@@ -59,12 +55,16 @@ class TernaryFilter extends SelectFilter
 
     public function getTrueLabel(): ?string
     {
-        return $this->evaluate($this->trueLabel);
+        $label = $this->translateText($this->evaluate($this->trueLabel));
+
+        return $label === null ? null : (string) $label;
     }
 
     public function getFalseLabel(): ?string
     {
-        return $this->evaluate($this->falseLabel);
+        $label = $this->translateText($this->evaluate($this->falseLabel));
+
+        return $label === null ? null : (string) $label;
     }
 
     public function getFormField(): Select

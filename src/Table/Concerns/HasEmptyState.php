@@ -9,6 +9,8 @@ use Closure;
 use InvalidArgumentException;
 use Sylament\Actions\Action;
 use Sylament\Actions\ActionGroup;
+use Symfony\Component\Translation\TranslatableMessage;
+use Symfony\Contracts\Translation\TranslatableInterface;
 use Twig\Markup;
 
 use function Sylament\Support\wrap;
@@ -22,9 +24,9 @@ trait HasEmptyState
      */
     protected array $emptyStateActions = [];
 
-    protected string|Markup|Closure|null $emptyStateHeading = null;
+    protected string|Markup|TranslatableInterface|Closure|null $emptyStateHeading = null;
 
-    protected string|Markup|Closure|null $emptyStateDescription = null;
+    protected string|Markup|TranslatableInterface|Closure|null $emptyStateDescription = null;
 
     protected string|BackedEnum|Markup|Closure|null $emptyStateIcon = null;
 
@@ -82,14 +84,14 @@ trait HasEmptyState
         return $this;
     }
 
-    public function emptyStateHeading(string|Markup|Closure|null $heading): static
+    public function emptyStateHeading(string|Markup|TranslatableInterface|Closure|null $heading): static
     {
         $this->emptyStateHeading = $heading;
 
         return $this;
     }
 
-    public function emptyStateDescription(string|Markup|Closure|null $description): static
+    public function emptyStateDescription(string|Markup|TranslatableInterface|Closure|null $description): static
     {
         $this->emptyStateDescription = $description;
 
@@ -121,12 +123,14 @@ trait HasEmptyState
 
     public function getEmptyStateHeading(): string|Markup
     {
-        return $this->evaluate($this->emptyStateHeading) ?? sprintf('No %s', $this->getPluralRecordLabel());
+        $heading = $this->evaluate($this->emptyStateHeading) ?? new TranslatableMessage('table.empty.heading', ['model' => $this->getPluralRecordLabel()], 'sylament-tables');
+
+        return $heading instanceof TranslatableInterface ? (string) $this->translateText($heading) : $heading;
     }
 
     public function getEmptyStateDescription(): string|Markup|null
     {
-        return $this->evaluate($this->emptyStateDescription);
+        return $this->translateText($this->evaluate($this->emptyStateDescription));
     }
 
     public function getEmptyStateIcon(): string|BackedEnum|Markup|null

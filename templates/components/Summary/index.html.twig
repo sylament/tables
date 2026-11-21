@@ -2,7 +2,7 @@
     id = null,
 
     columns = [],
-    pluralRecordLabel = 'records',
+    pluralRecordLabel = null,
 
     pageQuery = null,
     allQuery = null,
@@ -43,7 +43,7 @@
         {% if placeholderColumns and actionsBeforeColumns %}<td class="sy-ta-cell"></td>{% endif %}
 
         {% if extraHeadingColumn %}
-            <th scope="col" class="sy-ta-cell sy-ta-summary-header-cell sy-align-start">Summary</th>
+            <th scope="col" class="sy-ta-cell sy-ta-summary-header-cell sy-align-start">{{ 'table.summary.heading'|trans(domain: 'sylament-tables') }}</th>
         {% endif %}
 
         {% for column in columns %}
@@ -67,7 +67,7 @@
                     ]),
                 }) }}>
                     {%- if isFirstHeadingCell -%}
-                        Summary
+                        {{ 'table.summary.heading'|trans(domain: 'sylament-tables') }}
                     {%- elseif hasColumnLabel -%}
                         {{ column.getLabel }}
                     {%- endif -%}
@@ -83,7 +83,7 @@
     <twig:SylamentTables:SummaryRow
         :id="id ? id ~ '.page' : null"
         :columns="columns"
-        heading="This page"
+        :heading="'table.summary.subheadings.page'|trans(domain: 'sylament-tables')"
         :query="pageQuery"
         :selectedState="pageSelectedState"
         :extraHeadingColumn="extraHeadingColumn"
@@ -96,7 +96,7 @@
     <twig:SylamentTables:SummaryRow
         :id="id ? id ~ '.all' : null"
         :columns="columns"
-        :heading="hasPageSummary ? 'All ' ~ pluralRecordLabel : 'Summary'"
+        :heading="hasPageSummary ? 'table.summary.subheadings.all'|trans({label: pluralRecordLabel ?? ''}, domain: 'sylament-tables') : 'table.summary.heading'|trans(domain: 'sylament-tables')"
         :query="allQuery"
         :selectedState="allSelectedState"
         :extraHeadingColumn="extraHeadingColumn"

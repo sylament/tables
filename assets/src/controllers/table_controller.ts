@@ -16,7 +16,7 @@ const RECORD_CHECKBOX_SELECTOR = ".sy-ta-record-checkbox";
 const ROW_SELECTOR = ".sy-ta-row";
 const SELECTED_ROW_CLASS = "sy-selected";
 const BULK_ONLY_SELECTOR = "[data-sy-table-bulk-only]";
-const COUNT_PLACEHOLDER = ":count";
+const COUNT_TOKEN = "__COUNT__";
 
 const ROW_GROUP_ATTRIBUTE = "data-sy-group";
 const GROUP_KEYS_ATTRIBUTE = "data-sy-group-keys";
@@ -59,8 +59,7 @@ export default class extends Controller<HTMLElement> {
     deferred: { type: Boolean, default: false },
     pollInterval: Number,
     groupsCollapsedByDefault: { type: Boolean, default: false },
-    countOne: String,
-    countMany: String,
+    countMessages: Object,
   };
 
   declare readonly recordCheckboxTargets: HTMLInputElement[];
@@ -85,8 +84,7 @@ export default class extends Controller<HTMLElement> {
   declare readonly hasPollIntervalValue: boolean;
   declare readonly pollIntervalValue: number;
   declare readonly groupsCollapsedByDefaultValue: boolean;
-  declare readonly countOneValue: string;
-  declare readonly countManyValue: string;
+  declare readonly countMessagesValue: Record<string, string>;
 
   #component: Component | null = null;
   #unsubscribe: (() => void) | null = null;
@@ -463,9 +461,11 @@ export default class extends Controller<HTMLElement> {
   }
 
   #countLabel(count: number): string {
-    const template = count === 1 ? this.countOneValue : this.countManyValue;
+    const messages = this.countMessagesValue;
+    const category = new Intl.PluralRules(document.documentElement.lang || undefined).select(count);
+    const template = messages[category] ?? messages.other ?? "";
 
-    return template.replaceAll(COUNT_PLACEHOLDER, new Intl.NumberFormat().format(count));
+    return template.replaceAll(COUNT_TOKEN, new Intl.NumberFormat().format(count));
   }
 
   #repaint(): void {

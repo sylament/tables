@@ -151,7 +151,7 @@
                     }, stimulus_target(listController, 'expandToggle')
                         |stimulus_action(listController, 'expand', 'click')
                         |stimulus_action(listController, 'expand', 'keydown.enter')
-                        |stimulus_action(listController, 'expand', 'keydown.space')) }}>Show {{ overLimitCount }} more</span>
+                        |stimulus_action(listController, 'expand', 'keydown.space')) }}>{{ 'table.columns.text.actions.expand_list'|trans({count: overLimitCount}, domain: 'sylament-tables') }}</span>
                     <span {{ attrs({
                         role: 'button',
                         class: 'sy-link sy-size-xs',
@@ -160,9 +160,9 @@
                     }, stimulus_target(listController, 'collapseToggle')
                         |stimulus_action(listController, 'collapse', 'click')
                         |stimulus_action(listController, 'collapse', 'keydown.enter')
-                        |stimulus_action(listController, 'collapse', 'keydown.space')) }}>Show {{ overLimitCount }} less</span>
+                        |stimulus_action(listController, 'collapse', 'keydown.space')) }}>{{ 'table.columns.text.actions.collapse_list'|trans({count: overLimitCount}, domain: 'sylament-tables') }}</span>
                 {%- else -%}
-                    and {{ overLimitCount }} more
+                    {{ 'table.columns.text.more_list_items'|trans({count: overLimitCount}, domain: 'sylament-tables') }}
                 {%- endif -%}
             </div>
         {%- endif -%}

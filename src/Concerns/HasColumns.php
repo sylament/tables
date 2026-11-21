@@ -9,6 +9,7 @@ use Sylament\Schemas\Exceptions\ValidationException;
 use Sylament\Tables\Columns\Column;
 use Sylament\Tables\Columns\Contracts\Editable;
 use Sylament\Tables\Exceptions\RecordWriteException;
+use Symfony\Component\Translation\TranslatableMessage;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveArg;
 
@@ -105,7 +106,7 @@ trait HasColumns
             $messages = $validationException->getErrors()[$column] ?? [];
 
             $this->tableColumnStateErrors[$column][$record] = [
-                'message' => $messages[0] ?? 'The value is invalid.',
+                'message' => $messages[0] ?? (string) $tableColumn->translateText(new TranslatableMessage('The value is invalid.', domain: 'validators')),
                 'input' => $input,
             ];
 

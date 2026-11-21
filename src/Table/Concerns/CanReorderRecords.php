@@ -10,6 +10,7 @@ use Sylament\Actions\Action;
 use Sylament\Support\Components\Concerns\HasReorderAnimationDuration;
 use Sylament\Support\Icons\IconManager;
 use Sylament\Tables\Twig\TablesIconAlias;
+use Symfony\Component\Translation\TranslatableMessage;
 use Symfony\Contracts\Service\Attribute\Required;
 use Twig\Markup;
 
@@ -118,7 +119,7 @@ trait CanReorderRecords
     public function getReorderRecordsTriggerAction(bool $isReordering): Action
     {
         $action = Action::make('reorderRecords')
-            ->label($isReordering ? 'Finish reordering records' : 'Reorder records')
+            ->label($isReordering ? new TranslatableMessage('table.actions.disable_reordering.label', domain: 'sylament-tables') : new TranslatableMessage('table.actions.enable_reordering.label', domain: 'sylament-tables'))
             ->iconButton()
             ->icon($isReordering
                 ? $this->resolveReorderIcon(TablesIconAlias::ACTIONS_DISABLE_REORDERING, 'heroicons:check')

@@ -7,6 +7,7 @@ namespace Sylament\Tables\Filters;
 use Closure;
 use Sylament\Support\Components\Component;
 use Sylament\Support\Components\Concerns\HasColor;
+use Symfony\Contracts\Translation\TranslatableInterface;
 use Twig\Markup;
 
 class Indicator extends Component
@@ -15,13 +16,13 @@ class Indicator extends Component
 
     protected string $evaluationIdentifier = 'indicator';
 
-    protected string|Markup|Closure $label = '';
+    protected string|Markup|TranslatableInterface|Closure $label = '';
 
     protected bool|Closure $isRemovable = true;
 
     protected string|Closure|null $removeField = null;
 
-    public static function make(string|Markup|Closure $label): static
+    public static function make(string|Markup|TranslatableInterface|Closure $label): static
     {
         $indicator = static::newInstance();
 
@@ -32,7 +33,7 @@ class Indicator extends Component
         return $indicator;
     }
 
-    public function label(string|Markup|Closure $label): static
+    public function label(string|Markup|TranslatableInterface|Closure $label): static
     {
         $this->label = $label;
 
@@ -41,7 +42,9 @@ class Indicator extends Component
 
     public function getLabel(): string|Markup
     {
-        return $this->evaluate($this->label);
+        $label = $this->evaluate($this->label);
+
+        return $label instanceof TranslatableInterface ? (string) $this->translateText($label) : $label;
     }
 
     public function removable(bool|Closure $condition = true): static
