@@ -31,6 +31,7 @@
             {%- set itemCopyAttributes = item.copyable ? stimulus_controller(clipboardController, {
                 text: item.copyableState,
                 message: item.copyMessage,
+                failureMessage: 'components.copyable.messages.failed'|trans(domain: 'sylament'),
                 duration: item.copyMessageDuration,
             })
                 |stimulus_action(clipboardController, 'copy', 'click')
@@ -45,7 +46,7 @@
                     ],
                     role: item.copyable ? 'button' : (item.color is not null ? 'img' : null),
                     'aria-label': item.copyable
-                        ? (item.color is not null ? 'components/copyable.label'|trans({label: item.color}, domain: 'sylament') : 'table.columns.color.copy_label'|trans(domain: 'sylament-tables'))
+                        ? (item.color is not null ? 'components.copyable.label'|trans({label: item.color}, domain: 'sylament') : 'table.columns.color.copy_label'|trans(domain: 'sylament-tables'))
                         : item.color,
                     title: (itemTooltip is markup ? itemTooltip|striptags : itemTooltip) ?: null,
                     style: item.color is not null ? 'background-color: ' ~ item.color : null,

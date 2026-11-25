@@ -2,6 +2,7 @@ import { Controller } from "@hotwired/stimulus";
 import type { Component } from "@symfony/ux-live-component";
 
 import { resolveLiveHost } from "../utils/live_host.js";
+import { orderBeforeDrag, ReorderAnnouncer, readMoveControl } from "../utils/reorder_announcer.js";
 
 const SELECTED_MODEL = "selectedTableRecords";
 const DESELECTED_MODEL = "deselectedTableRecords";
@@ -9,6 +10,7 @@ const TRACKING_MODEL = "isTrackingDeselectedTableRecords";
 const LOADED_MODEL = "isTableLoaded";
 const SELECT_ALL_ACTION = "selectAllTableRecords";
 const REORDER_ACTION = "reorderTable";
+const MOVE_ACTION = "moveTableRecord";
 const LOAD_ACTION = "loadTable";
 const GROUP_ACTION = "groupTable";
 
@@ -50,6 +52,8 @@ export default class extends Controller<HTMLElement> {
     "groupDirection",
     "groupDirectionField",
     "groupCheckbox",
+    "reorderDescription",
+    "reorderStatus",
   ];
 
   static values = {
@@ -60,6 +64,7 @@ export default class extends Controller<HTMLElement> {
     pollInterval: Number,
     groupsCollapsedByDefault: { type: Boolean, default: false },
     countMessages: Object,
+    movedMessage: String,
   };
 
   declare readonly recordCheckboxTargets: HTMLInputElement[];
@@ -75,6 +80,9 @@ export default class extends Controller<HTMLElement> {
   declare readonly groupDirectionTargets: HTMLSelectElement[];
   declare readonly groupDirectionFieldTargets: HTMLElement[];
   declare readonly groupCheckboxTargets: HTMLInputElement[];
+  declare readonly reorderDescriptionTargets: HTMLElement[];
+  declare readonly hasReorderStatusTarget: boolean;
+  declare readonly reorderStatusTarget: HTMLElement;
 
   declare readonly canTrackValue: boolean;
   declare readonly pageOnlyValue: boolean;
@@ -85,12 +93,14 @@ export default class extends Controller<HTMLElement> {
   declare readonly pollIntervalValue: number;
   declare readonly groupsCollapsedByDefaultValue: boolean;
   declare readonly countMessagesValue: Record<string, string>;
+  declare readonly movedMessageValue: string;
 
   #component: Component | null = null;
   #unsubscribe: (() => void) | null = null;
   #clickController: AbortController | null = null;
   #lastChecked: HTMLInputElement | null = null;
   #pollTimer: ReturnType<typeof setInterval> | null = null;
+  #announcer: ReorderAnnouncer | null = null;
   #generation = 0;
 
   /** The group titles whose collapse is *flipped* from the default — Filament's `groupVisibility`. */
@@ -114,6 +124,11 @@ export default class extends Controller<HTMLElement> {
     }
 
     this.#component = component;
+    this.#announcer = new ReorderAnnouncer(component, {
+      descriptions: () => this.reorderDescriptionTargets,
+      status: () => (this.hasReorderStatusTarget ? this.reorderStatusTarget : null),
+      movedMessage: () => this.movedMessageValue,
+    });
 
     const onRender = (): void => this.#repaint();
     component.on("render:finished", onRender);
@@ -135,6 +150,9 @@ export default class extends Controller<HTMLElement> {
     this.#clickController = null;
 
     this.#stopPolling();
+
+    this.#announcer?.disconnect();
+    this.#announcer = null;
 
     this.#component = null;
     this.#lastChecked = null;
@@ -313,18 +331,77 @@ export default class extends Controller<HTMLElement> {
   }
 
   /**
-   * The drag control's new order, handed to the host's write action. The control never talks to
-   * a live component, so this is the whole bridge; the host re-resolves every key it is sent.
+   * The drag control's new order, handed to the host's write action and announced once it lands.
+   * The control never talks to a live component, so this is the whole drag bridge; the host
+   * re-resolves every key it is sent.
    */
   async reorder(event: Event): Promise<void> {
-    const items = (event as CustomEvent<{ items?: unknown }>).detail?.items;
+    const detail = (
+      event as CustomEvent<{
+        items?: unknown;
+        item?: unknown;
+        oldDraggableIndex?: unknown;
+        newDraggableIndex?: unknown;
+      }>
+    ).detail;
     const component = this.#component;
 
-    if (!Array.isArray(items) || component === null) {
+    if (!Array.isArray(detail?.items) || component === null) {
       return;
     }
 
-    await component.action(REORDER_ACTION, { order: toKeys(items) });
+    const order = toKeys(detail.items);
+    const request = () => component.action(REORDER_ACTION, { order });
+    const { item, oldDraggableIndex, newDraggableIndex } = detail;
+
+    if (
+      this.#announcer === null ||
+      typeof item !== "string" ||
+      typeof oldDraggableIndex !== "number" ||
+      typeof newDraggableIndex !== "number"
+    ) {
+      await request();
+
+      return;
+    }
+
+    await this.#announcer.track(
+      {
+        item,
+        direction: "drag",
+        before: orderBeforeDrag(order, item, oldDraggableIndex, newDraggableIndex),
+      },
+      request,
+    );
+  }
+
+  /**
+   * A screen-reader move button's one step, Filament's `moveTableRecord()`: refused at an end and
+   * while another move waits, and announced once the host's new order lands.
+   */
+  async move(event: Event): Promise<void> {
+    const control = event.currentTarget;
+    const component = this.#component;
+    const announcer = this.#announcer;
+
+    if (
+      !(control instanceof HTMLButtonElement) ||
+      control.disabled ||
+      component === null ||
+      announcer === null
+    ) {
+      return;
+    }
+
+    const move = readMoveControl(control);
+
+    if (move === null) {
+      return;
+    }
+
+    await announcer.track({ ...move, control }, () =>
+      component.action(MOVE_ACTION, { recordKey: move.item, direction: move.direction }),
+    );
   }
 
   /**

@@ -218,7 +218,7 @@ class Group extends Component
         $label = $this->evaluate($this->label);
 
         if ($label !== null) {
-            return $label instanceof TranslatableInterface ? (string) $this->translateText($label) : $label;
+            return $this->translateText($label);
         }
 
         return (string) u($this->getId())

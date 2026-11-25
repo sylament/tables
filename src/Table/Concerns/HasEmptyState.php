@@ -125,7 +125,7 @@ trait HasEmptyState
     {
         $heading = $this->evaluate($this->emptyStateHeading) ?? new TranslatableMessage('table.empty.heading', ['model' => $this->getPluralRecordLabel()], 'sylament-tables');
 
-        return $heading instanceof TranslatableInterface ? (string) $this->translateText($heading) : $heading;
+        return $this->translateText($heading);
     }
 
     public function getEmptyStateDescription(): string|Markup|null

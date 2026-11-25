@@ -1,11 +1,13 @@
 import { Controller } from "@hotwired/stimulus";
 import { resolveLiveHost } from "../utils/live_host.js";
+import { orderBeforeDrag, ReorderAnnouncer, readMoveControl } from "../utils/reorder_announcer.js";
 const SELECTED_MODEL = "selectedTableRecords";
 const DESELECTED_MODEL = "deselectedTableRecords";
 const TRACKING_MODEL = "isTrackingDeselectedTableRecords";
 const LOADED_MODEL = "isTableLoaded";
 const SELECT_ALL_ACTION = "selectAllTableRecords";
 const REORDER_ACTION = "reorderTable";
+const MOVE_ACTION = "moveTableRecord";
 const LOAD_ACTION = "loadTable";
 const GROUP_ACTION = "groupTable";
 const RECORD_CHECKBOX_SELECTOR = ".sy-ta-record-checkbox";
@@ -30,7 +32,9 @@ class table_controller_default extends Controller {
     "groupColumn",
     "groupDirection",
     "groupDirectionField",
-    "groupCheckbox"
+    "groupCheckbox",
+    "reorderDescription",
+    "reorderStatus"
   ];
   static values = {
     canTrack: { type: Boolean, default: false },
@@ -39,13 +43,15 @@ class table_controller_default extends Controller {
     deferred: { type: Boolean, default: false },
     pollInterval: Number,
     groupsCollapsedByDefault: { type: Boolean, default: false },
-    countMessages: Object
+    countMessages: Object,
+    movedMessage: String
   };
   #component = null;
   #unsubscribe = null;
   #clickController = null;
   #lastChecked = null;
   #pollTimer = null;
+  #announcer = null;
   #generation = 0;
   /** The group titles whose collapse is *flipped* from the default — Filament's `groupVisibility`. */
   #toggledGroups = /* @__PURE__ */ new Set();
@@ -61,6 +67,11 @@ class table_controller_default extends Controller {
       return;
     }
     this.#component = component;
+    this.#announcer = new ReorderAnnouncer(component, {
+      descriptions: () => this.reorderDescriptionTargets,
+      status: () => this.hasReorderStatusTarget ? this.reorderStatusTarget : null,
+      movedMessage: () => this.movedMessageValue
+    });
     const onRender = () => this.#repaint();
     component.on("render:finished", onRender);
     this.#unsubscribe = () => component.off("render:finished", onRender);
@@ -76,6 +87,8 @@ class table_controller_default extends Controller {
     this.#clickController?.abort();
     this.#clickController = null;
     this.#stopPolling();
+    this.#announcer?.disconnect();
+    this.#announcer = null;
     this.#component = null;
     this.#lastChecked = null;
   }
@@ -209,16 +222,51 @@ class table_controller_default extends Controller {
     this.#repaint();
   }
   /**
-   * The drag control's new order, handed to the host's write action. The control never talks to
-   * a live component, so this is the whole bridge; the host re-resolves every key it is sent.
+   * The drag control's new order, handed to the host's write action and announced once it lands.
+   * The control never talks to a live component, so this is the whole drag bridge; the host
+   * re-resolves every key it is sent.
    */
   async reorder(event) {
-    const items = event.detail?.items;
+    const detail = event.detail;
     const component = this.#component;
-    if (!Array.isArray(items) || component === null) {
+    if (!Array.isArray(detail?.items) || component === null) {
       return;
     }
-    await component.action(REORDER_ACTION, { order: toKeys(items) });
+    const order = toKeys(detail.items);
+    const request = () => component.action(REORDER_ACTION, { order });
+    const { item, oldDraggableIndex, newDraggableIndex } = detail;
+    if (this.#announcer === null || typeof item !== "string" || typeof oldDraggableIndex !== "number" || typeof newDraggableIndex !== "number") {
+      await request();
+      return;
+    }
+    await this.#announcer.track(
+      {
+        item,
+        direction: "drag",
+        before: orderBeforeDrag(order, item, oldDraggableIndex, newDraggableIndex)
+      },
+      request
+    );
+  }
+  /**
+   * A screen-reader move button's one step, Filament's `moveTableRecord()`: refused at an end and
+   * while another move waits, and announced once the host's new order lands.
+   */
+  async move(event) {
+    const control = event.currentTarget;
+    const component = this.#component;
+    const announcer = this.#announcer;
+    if (!(control instanceof HTMLButtonElement) || control.disabled || component === null || announcer === null) {
+      return;
+    }
+    const move = readMoveControl(control);
+    if (move === null) {
+      return;
+    }
+    await announcer.track(
+      { ...move, control },
+      () => component.action(MOVE_ACTION, { recordKey: move.item, direction: move.direction })
+    );
   }
   /**
    * The re-render loop `poll()` asked for, in milliseconds. It is independent of

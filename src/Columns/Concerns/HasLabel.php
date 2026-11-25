@@ -38,7 +38,7 @@ trait HasLabel
             return $this->getTranslator()->trans($label);
         }
 
-        return $label instanceof TranslatableInterface ? (string) $this->translateText($label) : $label;
+        return $this->translateText($label);
     }
 
     protected function getDefaultLabel(): string

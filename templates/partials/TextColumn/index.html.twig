@@ -87,6 +87,7 @@
             {%- set copyStimulus = isCopyable ? stimulus_controller(clipboardController, {
                 text: component.getCopyableState(item.state) ?? item.content,
                 message: component.getCopyMessage(item.state),
+                failureMessage: 'components.copyable.messages.failed'|trans(domain: 'sylament'),
                 duration: component.getCopyMessageDuration(item.state),
             })|stimulus_action(clipboardController, 'copy', 'click')
                 |stimulus_action(clipboardController, 'copy', 'keydown.enter')

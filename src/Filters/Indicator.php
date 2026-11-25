@@ -44,7 +44,7 @@ class Indicator extends Component
     {
         $label = $this->evaluate($this->label);
 
-        return $label instanceof TranslatableInterface ? (string) $this->translateText($label) : $label;
+        return $this->translateText($label);
     }
 
     public function removable(bool|Closure $condition = true): static

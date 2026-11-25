@@ -217,7 +217,7 @@ trait CanSearchRecords
             $label = $column->getLabel();
 
             $indicators[$columnName] = Indicator::make(new TranslatableMessage('table.fields.search.column_indicator', [
-                'column' => $label instanceof Markup ? strip_tags((string) $label) : $label,
+                'column' => $label instanceof Markup ? html_entity_decode(strip_tags((string) $label), ENT_QUOTES | ENT_HTML5, 'UTF-8') : $label,
                 'term' => $search,
             ], 'sylament-tables'));
         }

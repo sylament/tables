@@ -10,8 +10,10 @@ table:
             label: 'Filter'
         group:
             label: 'Group'
-        reorder_record:
-            label: 'Reorder item {key}'
+        move_record_down:
+            label: 'Move {label} down'
+        move_record_up:
+            label: 'Move {label} up'
     column_manager:
         actions:
             apply:
@@ -84,6 +86,10 @@ table:
         label_prefix: '{label}: '
     loading: 'Loading'
     reorder_indicator: 'Drag and drop the records into order.'
+    reordering:
+        moved: '{label} moved to position {position} of {count}.'
+        position: '{label}, position {position, number} of {count, number}.'
+    result_count: '{count, plural, =0 {No results} one {# result} other {# results}}'
     selection_indicator:
         actions:
             deselect_all:

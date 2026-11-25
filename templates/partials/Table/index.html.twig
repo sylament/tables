@@ -56,7 +56,7 @@
 {% set groupCollapsible = group is not null and group.isCollapsible %}
 {% set groupsCollapsed = groupCollapsible and component.areGroupsCollapsedByDefault %}
 {% set groupLabelPrefix = group is not null and group.isTitlePrefixedWithLabel ? group.getLabel : null %}
-{% set groupLabelText = groupLabelPrefix is not empty ? (groupLabelPrefix is markup ? groupLabelPrefix|striptags : groupLabelPrefix) ~ '' : null %}
+{% set groupLabelText = groupLabelPrefix is not empty ? groupLabelPrefix|plain_text ~ '' : null %}
 
 {% set filterIndicators = component.getFilterIndicators %}
 {% set removableIndicatorCount = filterIndicators|filter(carrier => carrier.indicator.isRemovable)|length %}
@@ -227,7 +227,19 @@
         one: 'table.selection_indicator.selected_count'|trans({count: 1, shown: '__COUNT__'}, domain: 'sylament-tables'),
         other: 'table.selection_indicator.selected_count'|trans({count: 2, shown: '__COUNT__'}, domain: 'sylament-tables'),
     },
+    movedMessage: isReorderable ? 'table.reordering.moved'|trans({label: '__LABEL__', position: '__POSITION__', count: '__COUNT__'}, domain: 'sylament-tables') : null,
 }) : null) }}>
+    {% if isReorderable %}
+        <span {{ attrs({
+            id: hostId ~ '.table.reorder-status',
+            class: 'sy-ta-sr-only',
+            role: 'status',
+            'aria-live': 'polite',
+            'aria-atomic': 'true',
+            'data-live-ignore': true,
+        }, stimulus_target('sylament--tables--table', 'reorderStatus')) }}></span>
+    {% endif %}
+
     <div class="sy-ta-ctn">
         {% if headerVisible %}
             <div {{ attrs({class: classes('sy-ta-header', {'sy-ta-header-adaptive-actions-position': headerActions is not empty and headerActionsAdaptive})}) }}>
@@ -512,6 +524,11 @@
                 <span class="sy-ta-sr-only">{{ 'table.loading'|trans(domain: 'sylament-tables') }}</span>
             </div>
         {% else %}
+            {# The total across all pages, so the region announces only when the result set
+               changes and not on every page turn; a paginator with no total reports its page. #}
+            {% set resultCount = paginator is not null and paginator.getTotalRecordCount is not null ? paginator.getTotalRecordCount : records|length %}
+            <div role="status" aria-live="polite" aria-atomic="true" class="sy-ta-sr-only">{{ 'table.result_count'|trans({count: resultCount}, domain: 'sylament-tables') }}</div>
+
             {% if records is not empty or isSearchableByColumn %}
                 {% set actionsHeaderCell %}<th scope="col" aria-label="{{ 'table.columns.actions.label'|trans({count: component.getFlatRecordActions|length}, domain: 'sylament-tables') }}" class="sy-ta-actions-header-cell sy-ta-empty-header-cell"></th>{% endset %}
 
@@ -564,7 +581,10 @@
                     checkboxTrailing: checkboxTrailing,
                 } %}
 
-                <table {{ attrs({class: classes('sy-ta-table', {'sy-ta-table-reordering': isReordering})}) }}>
+                <table {{ attrs({
+                    'aria-label': (heading|striptags|trim) ?: component.getPluralRecordLabel,
+                    class: classes('sy-ta-table', {'sy-ta-table-reordering': isReordering}),
+                }) }}>
                     <thead>
                         <tr>
                             {% if isReordering and records is not empty %}<th scope="col" class="sy-ta-reorder-header-cell sy-ta-empty-header-cell"></th>{% endif %}
@@ -651,7 +671,7 @@
                                 {% for column in columns %}
                                     {% set columnName = column.getName %}
                                     {% set columnLabel = column.getLabel %}
-                                    {% set columnAriaLabel = (columnLabel is markup ? columnLabel|striptags : columnLabel)|trim ?: null %}
+                                    {% set columnAriaLabel = columnLabel|plain_text|trim ?: null %}
                                     {% set isColumnIndividuallySearchable = column.isIndividuallySearchable %}
                                     {% set columnHiddenFrom = column.getHiddenFrom %}
                                     {% set columnVisibleFrom = column.getVisibleFrom %}
@@ -696,7 +716,7 @@
                             {% if boundary is not null and boundary.isFirstOfGroup and not isGroupsOnly %}
                                 {% set groupKey = boundary.key %}
                                 {% set groupTitle = boundary.title ~ '' %}
-                                {% set groupTitleText = (boundary.title is markup ? boundary.title|striptags : boundary.title) ~ '' %}
+                                {% set groupTitleText = boundary.title|plain_text ~ '' %}
                                 {% set groupRowId = hostId ~ '.table.groups.' ~ ((groupKey ?? '')|url_encode) %}
 
                                 {% set groupSelectionCell %}{% if isSelectionEnabled %}
@@ -805,15 +825,46 @@
                                     'data-sy-group': boundary is not null ? boundary.title ~ '' : null,
                                 }) }}>
                                     {% if isReordering %}
+                                        {# The record title only where the table names one, as Filament's does; an
+                                           array row has no title to read, so it is named by its key. #}
+                                        {% set reorderLabel = record is not iterable and (component.hasCustomRecordTitle or component.getRecordTitleAttribute is filled) ? component.getRecordTitle(record) : recordKey %}
+                                        {% set reorderDescriptionId = hostId ~ '.table.reorder.' ~ (recordKey|url_encode) %}
+
                                         <td class="sy-ta-cell sy-ta-reorder-handle-cell">
                                             <twig:SylamentSupport:IconButton
                                                 class="sy-ta-reorder-handle"
                                                 icon="heroicons:bars-2"
                                                 :iconAlias="constant('Sylament\\Tables\\Twig\\TablesIconAlias::REORDER_HANDLE')"
                                                 color="gray"
-                                                :label="'table.actions.reorder_record.label'|trans({key: recordKey}, domain: 'sylament-tables')"
+                                                aria-hidden="true"
+                                                tabindex="-1"
                                                 :data-sortable-handle="true"
                                             />
+
+                                            <span {{ attrs({
+                                                id: reorderDescriptionId,
+                                                class: 'sy-ta-sr-only',
+                                                'data-reorder-description': recordKey,
+                                                'data-reorder-label': reorderLabel,
+                                            }, stimulus_target('sylament--tables--table', 'reorderDescription')) }}>{{ 'table.reordering.position'|trans({label: reorderLabel, position: loop.index, count: loop.length}, domain: 'sylament-tables') }}</span>
+
+                                            <div class="sy-ta-sr-only">
+                                                <button {{ attrs({
+                                                    type: 'button',
+                                                    tabindex: '-1',
+                                                    disabled: loop.first,
+                                                    'aria-describedby': reorderDescriptionId,
+                                                    'data-reorder-direction': 'up',
+                                                }, stimulus_action('sylament--tables--table', 'move', 'click')) }}>{{ 'table.actions.move_record_up.label'|trans({label: reorderLabel}, domain: 'sylament-tables') }}</button>
+
+                                                <button {{ attrs({
+                                                    type: 'button',
+                                                    tabindex: '-1',
+                                                    disabled: loop.last,
+                                                    'aria-describedby': reorderDescriptionId,
+                                                    'data-reorder-direction': 'down',
+                                                }, stimulus_action('sylament--tables--table', 'move', 'click')) }}>{{ 'table.actions.move_record_down.label'|trans({label: reorderLabel}, domain: 'sylament-tables') }}</button>
+                                            </div>
                                         </td>
                                     {% endif %}
                                     {% if actionsBeforeCells %}{{ actionsCell }}{% endif %}
@@ -889,7 +940,7 @@
                                 <twig:SylamentTables:SummaryRow
                                     :id="hostId ~ '.table.group-summary.' ~ ((boundary.key ?? '')|url_encode)"
                                     :columns="summaryColumns"
-                                    :heading="isGroupsOnly ? boundary.title : 'table.summary.subheadings.group'|trans({group: (boundary.title is markup ? boundary.title|striptags : boundary.title) ~ ''}, domain: 'sylament-tables')"
+                                    :heading="isGroupsOnly ? boundary.title : 'table.summary.subheadings.group'|trans({group: boundary.title|plain_text ~ ''}, domain: 'sylament-tables')"
                                     :query="groupSummaryQuery"
                                     :selectedState="component.getLiveComponent.getTableSummarySelectedState(groupSummaryQuery)"
                                     :groupsOnly="isGroupsOnly"

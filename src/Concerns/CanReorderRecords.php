@@ -93,6 +93,42 @@ trait CanReorderRecords
     }
 
     /**
+     * Swaps the record with its neighbour above or below in the listed order
+     * and writes the whole order through {@see reorderTable()}. The key is only
+     * compared against the listed records' own keys, so the order written is
+     * the server's; an unknown key, a direction other than `up` or `down`, a
+     * move past either end and a table outside the reorder mode write nothing.
+     */
+    #[LiveAction]
+    public function moveTableRecord(#[LiveArg] string $recordKey, #[LiveArg] string $direction): void
+    {
+        if (!$this->isTableReordering() || !in_array($direction, ['up', 'down'], true)) {
+            return;
+        }
+
+        $order = array_map(
+            fn (object|array $record): string => $this->getTableRecordKey($record),
+            array_values($this->getTable()->getRecords()),
+        );
+
+        $recordIndex = array_search($recordKey, $order, true);
+
+        if ($recordIndex === false) {
+            return;
+        }
+
+        $newRecordIndex = $recordIndex + ($direction === 'up' ? -1 : 1);
+
+        if (!array_key_exists($newRecordIndex, $order)) {
+            return;
+        }
+
+        [$order[$recordIndex], $order[$newRecordIndex]] = [$order[$newRecordIndex], $order[$recordIndex]];
+
+        $this->reorderTable($order);
+    }
+
+    /**
      * The submitted keys as managed entities, keyed by record key — the
      * selection lane's re-resolution, one statement per chunk of the order.
      * Reordering is unpaginated by default, so the order is the whole table and

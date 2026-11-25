@@ -3,7 +3,7 @@
 {% set isDisabled = component.isDisabled %}
 {% set tooltip = component.getTooltip(component.getState) %}
 {% set label = component.getLabel %}
-{% set ariaLabel = (label is markup ? label|striptags : label)|trim ?: null %}
+{% set ariaLabel = label|plain_text|trim ?: null %}
 
 {% set hasInlinePrefix = component.isPrefixInline and (component.getPrefixIcon or component.getPrefixLabel is filled) %}
 {% set hasInlineSuffix = component.isSuffixInline and (component.getSuffixIcon or component.getSuffixLabel is filled) %}

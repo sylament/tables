@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Sylament\Tables\Concerns;
 
 use Closure;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Sylament\Schemas\Exceptions\ValidationException;
 use Sylament\Tables\Columns\Column;
 use Sylament\Tables\Columns\Contracts\Editable;
 use Sylament\Tables\Exceptions\RecordWriteException;
 use Symfony\Component\Translation\TranslatableMessage;
+use Symfony\Contracts\Service\Attribute\Required;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveArg;
 
@@ -24,6 +27,14 @@ trait HasColumns
      * @var array<string, array<string, array{message: string, input: mixed}>>
      */
     private array $tableColumnStateErrors = [];
+
+    protected ?LoggerInterface $tableColumnStateLogger = null;
+
+    #[Required]
+    public function setTableColumnStateLogger(LoggerInterface $logger): void
+    {
+        $this->tableColumnStateLogger = $logger;
+    }
 
     /**
      * Runs the closure a column's `action()` holds, for the record the client
@@ -106,7 +117,7 @@ trait HasColumns
             $messages = $validationException->getErrors()[$column] ?? [];
 
             $this->tableColumnStateErrors[$column][$record] = [
-                'message' => $messages[0] ?? (string) $tableColumn->translateText(new TranslatableMessage('The value is invalid.', domain: 'validators')),
+                'message' => $messages[0] ?? $this->translateInvalidTableColumnState($tableColumn),
                 'input' => $input,
             ];
 
@@ -116,8 +127,12 @@ trait HasColumns
         try {
             $tableColumn->updateState($input);
         } catch (RecordWriteException $recordWriteException) {
+            if ($recordWriteException->getInvalidMessage() === null) {
+                $this->getTableColumnStateLogger()->error('The editable column [{column}] could not write its state onto record [{record}].', ['column' => $column, 'record' => $record, 'exception' => $recordWriteException]);
+            }
+
             $this->tableColumnStateErrors[$column][$record] = [
-                'message' => $recordWriteException->getMessage(),
+                'message' => $recordWriteException->getInvalidMessage() ?? $this->translateInvalidTableColumnState($tableColumn),
                 'input' => $input,
             ];
 
@@ -134,5 +149,15 @@ trait HasColumns
     public function getTableColumnStateError(string $column, string $recordKey): ?array
     {
         return $this->tableColumnStateErrors[$column][$recordKey] ?? null;
+    }
+
+    protected function getTableColumnStateLogger(): LoggerInterface
+    {
+        return $this->tableColumnStateLogger ?? new NullLogger();
+    }
+
+    private function translateInvalidTableColumnState(Column $column): string
+    {
+        return (string) $column->translateText(new TranslatableMessage('The value is invalid.', domain: 'validators'));
     }
 }

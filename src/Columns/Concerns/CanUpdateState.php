@@ -114,7 +114,10 @@ trait CanUpdateState
         $refusals = $this->getTable()->getAssociationReader()->withEntityManager($manager)->revertIdentifierChanges($record);
 
         if ($refusals !== []) {
-            throw new RecordWriteException((string) $this->getValidator()->validate($record, RecordKeyGuard::constraint($refusals))->get(0)->getMessage());
+            throw new RecordWriteException(
+                sprintf('The editable column [%s] would change the identifier of its record.', $this->getName()),
+                invalidMessage: (string) $this->getValidator()->validate($record, RecordKeyGuard::constraint($refusals))->get(0)->getMessage(),
+            );
         }
 
         $manager->persist($record);

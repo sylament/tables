@@ -79,7 +79,7 @@ trait HasIndicators
         }
 
         return Indicator::make(new TranslatableMessage('table.filters.state_indicator', [
-            'indicator' => $indicator instanceof Markup ? strip_tags((string) $indicator) : $indicator,
+            'indicator' => $indicator instanceof Markup ? html_entity_decode(strip_tags((string) $indicator), ENT_QUOTES | ENT_HTML5, 'UTF-8') : $indicator,
             'state' => $state,
         ], 'sylament-tables'));
     }
