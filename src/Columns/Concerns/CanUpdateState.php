@@ -11,6 +11,7 @@ use Doctrine\Persistence\ManagerRegistry;
 use LogicException;
 use Stringable;
 use Sylament\Schemas\State\Casts\Contracts\StateCast;
+use Sylament\Schemas\State\RecordManager;
 use Sylament\Schemas\Validation\RecordKeyGuard;
 use Sylament\Tables\Exceptions\RecordWriteException;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
@@ -212,14 +213,7 @@ trait CanUpdateState
         $registry = $this->managerRegistry
             ?? throw new LogicException(sprintf('The editable column [%s] persists a record, which needs the container-built instance — register it as a service so the manager registry is injected.', $this->getName()));
 
-        $manager = $registry->getManagerForClass($record::class)
-            ?? throw new LogicException(sprintf('No Doctrine manager handles %s.', $record::class));
-
-        if (!$manager instanceof EntityManagerInterface) {
-            throw new LogicException(sprintf('The editable column [%s] needs an ORM entity manager for %s, got %s.', $this->getName(), $record::class, get_debug_type($manager)));
-        }
-
-        return $manager;
+        return RecordManager::of($registry, $record::class);
     }
 
     /**
