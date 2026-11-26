@@ -12,21 +12,21 @@ use Sylament\Forms\Components\Field;
 use Sylament\Schemas\Components\Component;
 use Sylament\Schemas\Schema;
 
-trait HasSchema
+trait HasForm
 {
     /**
      * @var array<Component|Action|ActionGroup>|Closure|null
      */
-    protected array|Closure|null $schema = null;
+    protected array|Closure|null $formSchema = null;
 
     protected Field|Closure|null $modifyFormFieldUsing = null;
 
     /**
      * @param array<Component|Action|ActionGroup>|Closure|null $schema
      */
-    public function schema(array|Closure|null $schema): static
+    public function form(array|Closure|null $schema): static
     {
-        $this->schema = $schema;
+        $this->formSchema = $schema;
 
         return $this;
     }
@@ -43,9 +43,9 @@ trait HasSchema
      *
      * @return array<Component|Action|ActionGroup>
      */
-    public function getSchemaComponents(): array
+    public function getFormSchema(): array
     {
-        $schema = $this->evaluate($this->schema);
+        $schema = $this->evaluate($this->formSchema);
 
         if ($schema !== null) {
             return $schema;
@@ -70,15 +70,15 @@ trait HasSchema
         ];
     }
 
-    public function hasSchema(): bool
+    public function hasForm(): bool
     {
-        return $this->evaluate($this->schema) !== null;
+        return $this->evaluate($this->formSchema) !== null;
     }
 
     /**
      * The live child schema this filter's group owns inside the host's filters form.
      */
-    public function getSchema(): Schema
+    public function getForm(): Schema
     {
         $form = $this->getLiveComponent()->getTableFiltersForm();
 

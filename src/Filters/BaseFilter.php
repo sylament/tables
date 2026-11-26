@@ -13,10 +13,10 @@ use Sylament\Tables\Filters\Concerns\CanResetState;
 use Sylament\Tables\Filters\Concerns\CanSpanColumns;
 use Sylament\Tables\Filters\Concerns\HasColumns;
 use Sylament\Tables\Filters\Concerns\HasDefaultState;
+use Sylament\Tables\Filters\Concerns\HasForm;
 use Sylament\Tables\Filters\Concerns\HasIndicators;
 use Sylament\Tables\Filters\Concerns\HasLabel;
 use Sylament\Tables\Filters\Concerns\HasName;
-use Sylament\Tables\Filters\Concerns\HasSchema;
 use Sylament\Tables\Filters\Concerns\InteractsWithTableQuery;
 
 use function Sylament\Support\blank;
@@ -29,10 +29,10 @@ class BaseFilter extends Component
     use CanSpanColumns;
     use HasColumns;
     use HasDefaultState;
+    use HasForm;
     use HasIndicators;
     use HasLabel;
     use HasName;
-    use HasSchema;
     use InteractsWithTableQuery;
 
     protected string $evaluationIdentifier = 'filter';

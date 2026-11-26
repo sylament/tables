@@ -28,7 +28,7 @@ use function Sylament\Support\blank;
 trait HasTable
 {
     use CanAccessProperties;
-    use CanDeferLoading;
+    use CanBeLazyLoaded;
     use CanGroupRecords;
     use CanPaginateRecords;
     use CanPersistTableState;

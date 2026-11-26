@@ -6,23 +6,23 @@ namespace Sylament\Tables\Columns\Concerns;
 
 use stdClass;
 
-trait HasRowLoopObject
+trait HasRowLoop
 {
-    protected ?stdClass $loop = null;
+    protected ?stdClass $rowLoop = null;
 
     /**
      * @param array<string, mixed>|stdClass|null $loop
      */
     public function rowLoop(array|stdClass|null $loop): static
     {
-        $this->loop = is_array($loop) ? $this->makeRowLoopObject($loop) : $loop;
+        $this->rowLoop = is_array($loop) ? $this->makeRowLoopObject($loop) : $loop;
 
         return $this;
     }
 
     public function getRowLoop(): ?stdClass
     {
-        return $this->loop;
+        return $this->rowLoop;
     }
 
     /**

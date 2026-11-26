@@ -5,7 +5,7 @@
 {% set hostId = component.getLiveComponent.getTableHostId %}
 {% set isReorderable = component.isReorderable %}
 {% set isReordering = component.isReordering %}
-{% set isDeferred = component.isLoadingDeferred %}
+{% set isDeferred = component.isLazyLoaded %}
 {% set pollIntervalMilliseconds = isReordering ? null : component.getPollingIntervalMilliseconds %}
 
 {% set paginator = records is not null ? component.getPaginator : null %}

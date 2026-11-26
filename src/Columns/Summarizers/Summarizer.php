@@ -122,7 +122,7 @@ class Summarizer extends ViewComponent
 
         $query = clone $query;
 
-        if ($this->hasQueryModification()) {
+        if ($this->hasQueryModificationCallback()) {
             $scoped = $this->evaluateQueryModification($query, $attribute);
 
             $query = $scoped instanceof QueryBuilder ? $scoped : $query;

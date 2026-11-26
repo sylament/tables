@@ -7,7 +7,7 @@ namespace Sylament\Tables\Concerns;
 use Symfony\UX\LiveComponent\Attribute\LiveAction;
 use Symfony\UX\LiveComponent\Attribute\LiveProp;
 
-trait CanDeferLoading
+trait CanBeLazyLoaded
 {
     /**
      * Whether the deferred window has closed. A transient render mode rather
@@ -29,7 +29,7 @@ trait CanDeferLoading
      */
     public function isTableLoaded(): bool
     {
-        if (!$this->getTable()->isLoadingDeferred()) {
+        if (!$this->getTable()->isLazyLoaded()) {
             return true;
         }
 

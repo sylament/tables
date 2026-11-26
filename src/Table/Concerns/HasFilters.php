@@ -131,7 +131,7 @@ trait HasFilters
         $groups = [];
 
         foreach ($this->getFilters() as $filterName => $filter) {
-            $group = Group::make($filter->getSchemaComponents())
+            $group = Group::make($filter->getFormSchema())
                 ->statePath($filterName)
                 ->key($filterName)
                 ->columnSpan($filter->getColumnSpan());

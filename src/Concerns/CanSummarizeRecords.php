@@ -196,7 +196,7 @@ trait CanSummarizeRecords
             $attribute = null;
 
             foreach ($column->getSummarizers() as $key => $summarizer) {
-                if (!$summarizer instanceof HasSelectAlias || $summarizer->hasQueryModification()) {
+                if (!$summarizer instanceof HasSelectAlias || $summarizer->hasQueryModificationCallback()) {
                     continue;
                 }
 

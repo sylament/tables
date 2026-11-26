@@ -25,26 +25,6 @@ trait HasBulkActions
     protected bool|Closure $selectsGroupsOnly = false;
 
     /**
-     * @deprecated Use toolbarActions() instead.
-     *
-     * @param array<Action|ActionGroup>|ActionGroup $actions
-     */
-    public function bulkActions(array|ActionGroup $actions): static
-    {
-        return $this->toolbarActions($actions);
-    }
-
-    /**
-     * @deprecated Use pushToolbarActions() instead.
-     *
-     * @param array<Action|ActionGroup>|ActionGroup $actions
-     */
-    public function pushBulkActions(array|ActionGroup $actions): static
-    {
-        return $this->pushToolbarActions($actions);
-    }
-
-    /**
      * @param array<Action|ActionGroup> $actions
      */
     public function groupedBulkActions(array $actions): static

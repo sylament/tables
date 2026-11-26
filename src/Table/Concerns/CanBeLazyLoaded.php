@@ -6,20 +6,20 @@ namespace Sylament\Tables\Table\Concerns;
 
 use Closure;
 
-trait CanDeferLoading
+trait CanBeLazyLoaded
 {
-    protected bool|Closure $isLoadingDeferred = false;
+    protected bool|Closure $isLazyLoaded = false;
 
-    public function deferLoading(bool|Closure $condition = true): static
+    public function lazyLoaded(bool|Closure $condition = true): static
     {
-        $this->isLoadingDeferred = $condition;
+        $this->isLazyLoaded = $condition;
 
         return $this;
     }
 
-    public function isLoadingDeferred(): bool
+    public function isLazyLoaded(): bool
     {
-        return (bool) $this->evaluate($this->isLoadingDeferred);
+        return (bool) $this->evaluate($this->isLazyLoaded);
     }
 
     /**

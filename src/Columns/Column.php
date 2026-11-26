@@ -35,7 +35,7 @@ use Sylament\Tables\Columns\Concerns\HasExtraHeaderAttributes;
 use Sylament\Tables\Columns\Concerns\HasLabel;
 use Sylament\Tables\Columns\Concerns\HasName;
 use Sylament\Tables\Columns\Concerns\HasRecord;
-use Sylament\Tables\Columns\Concerns\HasRowLoopObject;
+use Sylament\Tables\Columns\Concerns\HasRowLoop;
 use Sylament\Tables\Columns\Concerns\HasTooltip;
 use Sylament\Tables\Columns\Concerns\InteractsWithTableQuery;
 
@@ -68,7 +68,7 @@ class Column extends ViewComponent
     use HasName;
     use HasPlaceholder;
     use HasRecord;
-    use HasRowLoopObject;
+    use HasRowLoop;
     use HasTooltip;
     use HasVerticalAlignment;
     use HasWidth;

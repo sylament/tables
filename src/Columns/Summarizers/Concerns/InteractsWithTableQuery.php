@@ -40,7 +40,7 @@ trait InteractsWithTableQuery
      * Whether the summarizer scopes the dataset itself, which is what keeps it out
      * of the batched select: a scoped figure is not the one the batch reads.
      */
-    public function hasQueryModification(): bool
+    public function hasQueryModificationCallback(): bool
     {
         return $this->modifyQueryUsing instanceof Closure;
     }
